@@ -24,6 +24,8 @@ The history check uses each team's latest five league matches on earlier calenda
 
 ## V1 feature build
 
-Run `uv run python -m football_odds_predictor.features` to generate `data/processed/features.csv` from the normalized match table. Each row has pre-match Elo and two five-match sequences, oldest first. History and Elo carry over between seasons within the same league. Elo starts at 1500 with K=20 and no home advantage adjustment. Incomplete histories stay in the output with `history_complete=false`. Closing odds stay in the normalized table, which can be joined on league, season, source kickoff, and both teams.
+Run `uv run python -m football_odds_predictor.features --elo-warmup-dir data/raw/football-data-warmup` to generate `data/processed/features.csv` from the normalized match table. The warm-up directory contains the source's 2020/21 files, saved as `2021-E0.csv`, `2021-D1.csv`, and `2021-SP1.csv`. Those results update Elo before 2021/22. The output rows and five-match histories still start in 2021/22.
+
+Each row has pre-match Elo and two five-match sequences, oldest first. History and Elo carry over between seasons within the same league. Each team's first rating is 1500, with K=20 and no home advantage adjustment. Incomplete histories stay in the output with `history_complete=false`. Closing odds stay in the normalized table, which can be joined on league, season, source kickoff, and both teams.
 
 V1 assumes results and stats from earlier source dates are available when predicting on the fixture date. The archive lacks publication times, so this is an approximation. Fixtures from the prediction date never contribute results or stats to that day's predictions.
