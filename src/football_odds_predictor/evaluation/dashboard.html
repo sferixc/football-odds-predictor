@@ -67,7 +67,6 @@ th,td{padding:10px 14px;border-top:1px solid #e5ebe7}th{background:#f5f8f6;font-
       <li class="purple"><strong>Purple</strong><span>10% or more</span></li>
     </ol>
   </section>
-  <div id="player-filter" class="control" hidden><label for="player">Find a player</label><input id="player" type="search" placeholder="Player name"></div>
   <p id="status" role="status" aria-live="polite"></p>
   <p id="superbet-link" hidden><a href="https://superbet.ro/pariuri-sportive/fotbal" target="_blank" rel="noopener">Open Superbet football</a></p>
   <div id="sections"></div>
@@ -78,8 +77,7 @@ const stress = document.querySelector('#stress');
 const status = document.querySelector('#status');
 const sections = document.querySelector('#sections');
 const fixtureList = document.querySelector('#fixture-list');
-const player = document.querySelector('#player');
-const marketNames = { '1x2': '1X2', goals: 'Goals', cards: 'Cards', corners: 'Corners', shots: 'Player shots' };
+const marketNames = { '1x2': '1X2', goals: 'Goals', cards: 'Cards', corners: 'Corners' };
 const signals = new Set(['red', 'yellow', 'orange', 'green', 'purple']);
 let active = '1x2';
 let report = null;
@@ -151,7 +149,6 @@ function render() {
   document.querySelector('#superbet-link').hidden = !report?.offer_only;
   const groups = new Set(available.map(section => section.group));
   if (groups.size && !groups.has(active)) active = groups.values().next().value;
-  document.querySelector('#player-filter').hidden = active !== 'shots';
   document.querySelector('#legend').hidden = !available.some(section =>
     section.group === active && section.rows.some(row => signals.has(row.signal)));
   for (const button of document.querySelectorAll('#markets button')) {
@@ -170,9 +167,7 @@ function render() {
       title.append(element('p', 'Superbet prices only. Model data unavailable for this market.'));
     }
     card.append(title);
-    const shots = section.group === 'shots';
-    const query = player.value.trim().toLowerCase();
-    const rows = section.rows.filter(row => !shots || row.selection.toLowerCase().includes(query));
+    const rows = section.rows;
     if (!rows.length) {
       title.append(element('p', 'No matching selections.'));
       sections.append(card);
@@ -181,7 +176,6 @@ function render() {
     const table = element('table');
     const head = table.createTHead().insertRow();
     let columns = ['Selection', 'Model odds', 'Superbet', 'Promo', 'Loss risk', 'Est. return', 'Stressed return', 'Signal'];
-    if (shots) columns = ['Selection', 'Model odds', 'Superbet', 'Promo', 'Last result'];
     for (const column of columns) head.append(element('th', column));
     const body = table.createTBody();
     for (const item of rows) {
@@ -197,16 +191,12 @@ function render() {
       row.append(element('td', item.selection), element('td', asOdds(item.fair), 'model'),
         element('td', standard, scored && item.promotion == null ? 'priced' : ''),
         element('td', asOdds(item.promotion), scored && item.promotion != null ? 'priced' : ''));
-      if (shots) {
-        row.append(element('td', item.last_result ?? '—'));
-      } else {
-        row.append(element('td', asPercent(item.loss)), element('td', asPercent(item.return, true)),
-          element('td', asPercent(item.prudent, true)));
-        const signal = element('td');
-        const label = hasSignal ? item.signal : '';
-        signal.append(label ? element('span', label, 'badge') : element('span', '—'));
-        row.append(signal);
-      }
+      row.append(element('td', asPercent(item.loss)), element('td', asPercent(item.return, true)),
+        element('td', asPercent(item.prudent, true)));
+      const signal = element('td');
+      const label = hasSignal ? item.signal : '';
+      signal.append(label ? element('span', label, 'badge') : element('span', '—'));
+      row.append(signal);
     }
     const tableWrap = element('div', undefined, 'table-wrap');
     tableWrap.append(table);
@@ -306,7 +296,6 @@ for (const [group, label] of Object.entries(marketNames)) {
 }
 match.addEventListener('change', loadReport);
 stress.addEventListener('change', loadReport);
-player.addEventListener('input', render);
 refreshMatches();
 setInterval(refreshMatches, 30000);
 </script>
