@@ -7,6 +7,15 @@ V1 predicts one bookmaker's pre-match closing odds for home win, draw, and away 
 3. **Training and evaluation.** Compare statistical baselines, XGBoost, and a PyTorch LSTM on the same fixtures. Use chronological train, validation, and test splits. Fit preprocessing on training data and use validation to choose models before evaluating on the test set.
 4. **Upcoming matches.** Reuse the feature pipeline with newly collected statistics and start with batch predictions once the offline evaluation is complete.
 
+## Code layout
+
+- `data/` reads the raw CSVs, builds features, joins odds, and defines validation folds.
+- `models/` contains the median, Ridge, and XGBoost predictors.
+- `training/` runs each experiment across the folds.
+- `evaluation/` computes the shared error metrics.
+
+These directories are inside `src/football_odds_predictor/`. The original module commands below also work.
+
 ## EDA results
 
 Run `uv run python -m football_odds_predictor.preprocessing` to build `data/processed/matches.csv` from the raw season files. The output preserves missing statistics and keeps kickoff as the source clock time without assigning a time zone.
