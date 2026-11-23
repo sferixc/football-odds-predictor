@@ -16,6 +16,8 @@ Football research project using Python 3.12 and uv. The current dashboard compar
 
 The [Bet365 experiment notes](docs/project-plan.md) describe the first research track and its results. The [Superbet assessment plan](docs/superbet-assessment.md) explains the current track, its data sources, worked examples, and results.
 
+![Match dashboard comparing model odds with Superbet prices](docs/images/dashboard.png)
+
 ## Getting started
 
 Use the [contributor guide](CONTRIBUTING.md) for the one-time data setup. The clone includes `data/processed/matches.csv` and `data/processed/features.csv` for the Bet365 experiment. Raw archives, Superbet snapshots, and fitted model files stay local and must be downloaded or generated separately.
