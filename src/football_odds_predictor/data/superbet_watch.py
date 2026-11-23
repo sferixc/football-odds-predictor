@@ -1,4 +1,4 @@
-"""Discover the project competitions and capture each upcoming fixture once."""
+"""Discover upcoming fixtures and capture early and near-kickoff prices."""
 
 import argparse
 from dataclasses import dataclass
@@ -11,7 +11,9 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from .referee_lookup import find_appointment
-from .superbet_snapshot import ENDPOINT, UCL_TOURNAMENT, UEL_TOURNAMENT, capture, utc_timestamp
+from .superbet_snapshot import (
+    EARLY_LEAD, ENDPOINT, FINAL_WINDOW_START, UCL_TOURNAMENT, UEL_TOURNAMENT, capture, utc_timestamp,
+)
 
 LEAGUES = {106: "Premier League", 245: "Bundesliga", 98: "La Liga", UCL_TOURNAMENT: "Champions League", UEL_TOURNAMENT: "Europa League"}
 REFRESH_INTERVAL = timedelta(hours=1)
@@ -68,11 +70,12 @@ def next_capture(
     now: datetime,
     output_dir: Path,
     attempted: set[tuple[int, datetime]],
+    minimum_lead: timedelta = MINIMUM_LEAD,
 ) -> Fixture | None:
     """Find the earliest eligible job that has not already been captured or attempted."""
     return next((
         fixture for fixture in fixtures
-        if fixture.kickoff - now > MINIMUM_LEAD
+        if fixture.kickoff - now > minimum_lead
         and (fixture.event_id, fixture.kickoff) not in attempted
         and not (output_dir / f"{fixture.event_id}.json").exists()
     ), None)
@@ -82,12 +85,15 @@ def watch(output_dir: Path) -> None:
     """Refresh the schedule, then wait for either a capture or the next refresh."""
     fixtures = []
     attempted: set[tuple[int, datetime]] = set()
+    early_attempted: set[tuple[int, datetime]] = set()
+    early_dir = output_dir / "early"
     appointments = {}
     refresh_at = datetime.now(UTC)
     while True:
         now = datetime.now(UTC)
         refreshed = now >= refresh_at
         if refreshed:
+            early_attempted.clear()
             try:
                 fixtures = discover(now)
             except (KeyError, OSError, ValueError) as error:
@@ -131,7 +137,24 @@ def watch(output_dir: Path) -> None:
                         appointments[key] = appointment
 
         now = datetime.now(UTC)
-        wake_at = min(refresh_at, fixture.capture_time) if fixture is not None else refresh_at
+        if fixture is not None and fixture.capture_time <= now:
+            continue
+        early_fixture = next_capture(fixtures, now, early_dir, early_attempted, FINAL_WINDOW_START)
+        early_at = early_fixture.kickoff - EARLY_LEAD if early_fixture is not None else refresh_at
+        if early_fixture is not None and early_at <= now:
+            key = early_fixture.event_id, early_fixture.kickoff
+            early_attempted.add(key)
+            try:
+                appointment = appointments.get(key) or find_appointment(early_fixture, now)
+                if appointment is not None:
+                    appointments[key] = appointment
+                capture(early_fixture.event_id, early_fixture.kickoff, early_dir, appointment, early=True)
+            except (KeyError, OSError, ValueError) as error:
+                print(f"{early_fixture.name} (early capture): {error}", file=sys.stderr, flush=True)
+            continue
+
+        final_at = fixture.capture_time if fixture is not None else refresh_at
+        wake_at = min(refresh_at, early_at, final_at)
         time.sleep(max(0, min(60, (wake_at - now).total_seconds())))
 
 
@@ -143,7 +166,8 @@ def main() -> None:
     try:
         if args.list:
             for fixture in discover(datetime.now(UTC)):
-                print(f"{fixture.capture_time.isoformat()} | {fixture.league} | {fixture.name}")
+                early_at = fixture.kickoff - EARLY_LEAD
+                print(f"{fixture.league} | {fixture.name} | Early {early_at.isoformat()} | Final {fixture.capture_time.isoformat()}")
         else:
             watch(args.output_dir)
     except KeyboardInterrupt:

@@ -81,7 +81,7 @@ uv run python -m football_odds_predictor.data.superbet_watch --list
 uv run python -m football_odds_predictor.data.superbet_watch
 ```
 
-The watcher discovers fixtures in Premier League, Bundesliga, La Liga, Champions League, and Europa League. It refreshes the schedule hourly and attempts a capture about 15 minutes before kickoff. On success it prints `Saved … markets and … simple promotions to data/raw/superbet/<event-id>.json`. The accepted window is 10–20 minutes before kickoff. Stop the watcher with **Ctrl+C**. The 26 domestic leagues used for European team-history coverage are a separate historical-data scope; the live odds watcher does not currently cover all of them.
+The watcher discovers fixtures in Premier League, Bundesliga, La Liga, Champions League, and Europa League. It refreshes the schedule hourly. It attempts an early capture up to five hours before kickoff and stores it in `data/raw/superbet/early/<event-id>.json`. It keeps the final capture, taken around 15 minutes before kickoff in the 10–20 minute window, in `data/raw/superbet/<event-id>.json`. Stop the watcher with **Ctrl+C**. The 26 domestic leagues used for European team-history coverage are a separate historical-data scope; the live odds watcher does not currently cover all of them.
 
 ### Referee inputs
 
@@ -163,7 +163,7 @@ uv run python -m football_odds_predictor.data.superbet_watch
 uv run python -m football_odds_predictor.evaluation.dashboard
 ```
 
-Open [the local dashboard](http://127.0.0.1:8765). It automatically lists today's upcoming fixtures from the Superbet schedule and combines them with local captures for today. The dashboard refreshes the schedule every two minutes; the browser refreshes its fixture list every 30 seconds. The watcher refreshes its schedule hourly and attempts one odds capture per fixture about 15 minutes before kickoff, in the 10–20 minute window. It does not keep updating a quote after that capture. The first fixture is selected automatically; click another fixture to open its report. A fixture without a saved price capture stays listed as pending. The displayed day uses Amsterdam time, while kickoff times are formatted in your browser's local time. The schedule endpoint lists upcoming fixtures, so already-started matches appear only when a local capture exists.
+Open [the local dashboard](http://127.0.0.1:8765). It automatically lists today's upcoming fixtures from the Superbet schedule and combines them with local captures for today. The dashboard refreshes the schedule every two minutes; the browser refreshes its fixture list every 30 seconds. The watcher refreshes its schedule hourly. The dashboard shows early odds when available and switches to the separately saved final capture. The first fixture is selected automatically; click another fixture to open its report. A fixture without a saved price capture stays listed as pending. The displayed day uses Amsterdam time, while kickoff times are formatted in your browser's local time. The schedule endpoint lists upcoming fixtures, so already-started matches appear only when a local capture exists.
 
 Keep both terminals open: the dashboard displays the schedule and saved data, while the watcher performs the odds capture. Stop each process with **Ctrl+C**. The watcher covers five competitions; the 26 domestic leagues in the European history archive are not all live-odds competitions.
 

@@ -29,7 +29,9 @@ DASHBOARD_ZONE = ZoneInfo("Europe/Amsterdam")
 def snapshots() -> dict:
     """Index saved captures and local probes without exposing arbitrary file paths."""
     items = {}
-    for folder, probe in (("superbet", False), ("superbet-probes", True)):
+    for folder, probe, early in (
+        ("superbet-probes", True, False), ("superbet/early", False, True), ("superbet", False, False),
+    ):
         for path in (RAW / folder).glob("*.json"):
             try:
                 event, observed = read_snapshot(path, probe)
@@ -37,13 +39,11 @@ def snapshots() -> dict:
                 key = f"{folder}/{path.stem}"
                 items[key] = {
                     "id": key, "name": fixture["event_name"].replace("·", " – "),
-                    "kickoff": fixture["utc_date"], "probe": probe, "path": path,
+                    "kickoff": fixture["utc_date"], "probe": probe, "early": early, "path": path,
                 }
             except (KeyError, OSError, ValueError):
                 continue
-    return dict(sorted(
-        items.items(), key=lambda item: (not item[1]["probe"], item[1]["kickoff"]), reverse=True,
-    ))
+    return items
 
 
 def handler_for(models: dict) -> type[BaseHTTPRequestHandler]:
@@ -81,7 +81,7 @@ def handler_for(models: dict) -> type[BaseHTTPRequestHandler]:
                 merged[event_id] = {
                     "id": item["id"], "event_id": event_id, "name": item["name"],
                     "league": "", "kickoff": item["kickoff"], "captured": True,
-                    "probe": item["probe"],
+                    "probe": item["probe"], "early": item["early"],
                 }
             except (ValueError, OSError):
                 continue

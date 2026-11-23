@@ -10,6 +10,8 @@ from urllib.request import urlopen
 
 UCL_TOURNAMENT = 80794
 UEL_TOURNAMENT = 688
+EARLY_LEAD = timedelta(hours=5)
+FINAL_WINDOW_START = timedelta(minutes=20)
 EUROPEAN_TOURNAMENTS = {UCL_TOURNAMENT: "CL", UEL_TOURNAMENT: "EL"}
 ENDPOINT = "https://production-superbet-offer-ro.freetls.fastly.net/v3/ro-RO/events"
 # Source market IDs mapped to the event names used in the sporting analysis.
@@ -101,9 +103,13 @@ def utc_timestamp(value: str) -> datetime:
     return timestamp.astimezone(UTC)
 
 
-def check_window(kickoff: datetime, observed_at: datetime) -> None:
-    """Require an observed price 10 to 20 minutes before scheduled kickoff."""
-    if not timedelta(minutes=10) <= kickoff - observed_at <= timedelta(minutes=20):
+def check_window(kickoff: datetime, observed_at: datetime, *, early: bool = False) -> None:
+    """Keep early prices separate from the 10 to 20 minute capture."""
+    lead = kickoff - observed_at
+    if early:
+        if not FINAL_WINDOW_START < lead <= EARLY_LEAD:
+            raise ValueError("Early capture must be more than 20 minutes and at most 5 hours before kickoff")
+    elif not timedelta(minutes=10) <= lead <= FINAL_WINDOW_START:
         raise ValueError("Capture must take place 10–20 minutes before kickoff")
 
 
@@ -120,18 +126,19 @@ def read_event(payload: dict, event_id: int, kickoff: datetime) -> dict:
     return event
 
 
-def capture(event_id: int, kickoff: datetime, output_dir: Path, referee_appointment: dict | None = None) -> Path:
+def capture(event_id: int, kickoff: datetime, output_dir: Path, referee_appointment: dict | None = None,
+            *, early: bool = False) -> Path:
     """Fetch and save a single offer inside the pre-match window."""
     output = output_dir / f"{event_id}.json"
     if event_id <= 0 or output.exists():
         raise ValueError("Expected a positive event ID with no existing snapshot")
-    check_window(kickoff, datetime.now(UTC))
+    check_window(kickoff, datetime.now(UTC), early=early)
     url = f"{ENDPOINT}?{urlencode({'events': event_id})}"
     with urlopen(url, timeout=15) as response:
         payload = json.load(response)
     # Record completion time and recheck the window in case the request ran long.
     observed_at = datetime.now(UTC)
-    check_window(kickoff, observed_at)
+    check_window(kickoff, observed_at, early=early)
     event = read_event(payload, event_id, kickoff)
     promotions = simple_promotions(event)
 
@@ -143,6 +150,7 @@ def capture(event_id: int, kickoff: datetime, output_dir: Path, referee_appointm
                 "observed_at_utc": observed_at.isoformat(),
                 "source": url,
                 "simple_promotions": promotions,
+                **({"early": True} if early else {}),
                 **({"referee_appointment": referee_appointment} if referee_appointment else {}),
                 "event": event,
             },

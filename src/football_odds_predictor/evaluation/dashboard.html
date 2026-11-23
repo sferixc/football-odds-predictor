@@ -220,7 +220,7 @@ async function loadReport() {
     document.querySelector('#fixture').textContent = report.fixture;
     if (report.waiting) {
       document.querySelector('#metadata').textContent = 'Kickoff ' + timestamp(report.kickoff) + (report.competition ? ' · ' + report.competition : '');
-      status.textContent = 'Waiting for the scheduled pre-match odds capture. This page checks automatically.';
+      status.textContent = 'Waiting for odds. Early capture starts up to five hours before kickoff.';
       sections.replaceChildren();
       return;
     }
@@ -267,7 +267,9 @@ async function refreshMatches() {
       button.setAttribute('aria-pressed', String(item.id === (match.value || items[0].id)));
       button.append(element('span', timestamp(item.kickoff), 'time'));
       button.append(element('strong', item.name + (item.probe ? ' · probe' : '')));
-      button.append(element('small', [item.league, item.captured ? 'Odds captured' : 'Odds capture pending'].filter(Boolean).join(' · ')));
+      const captureLabel = item.early ? 'Early odds · final capture pending'
+        : item.captured ? 'Odds captured' : 'Odds capture pending';
+      button.append(element('small', [item.league, captureLabel].filter(Boolean).join(' · ')));
       button.addEventListener('click', () => {
         match.value = item.id;
         for (const other of fixtureList.querySelectorAll('button')) other.setAttribute('aria-pressed', String(other === button));
