@@ -13,6 +13,10 @@ FIXTURE_COLUMNS = (
 )
 SIDES = ("home", "away")
 MATCH_STATS = ("goals", "shots", "shots_on_target", "corners")
+HISTORY_FIELDS = (
+    "was_home", "opponent_elo",
+    *(f"{stat}_{direction}" for stat in MATCH_STATS for direction in ("for", "against")),
+)
 HISTORY_LENGTH = 5
 INITIAL_ELO = 1500.0
 ELO_K = 20.0
@@ -36,16 +40,12 @@ def build_features(
     ratings = defaultdict(lambda: INITIAL_ELO)
     histories = defaultdict(lambda: deque(maxlen=HISTORY_LENGTH))
     daily_changes = defaultdict(float)
-    history_fields = (
-        "was_home", "opponent_elo",
-        *(f"{stat}_{direction}" for stat in MATCH_STATS for direction in ("for", "against")),
-    )
     columns = [
         *FIXTURE_COLUMNS, "home_elo", "away_elo", "history_complete",
         *(f"{side}_match_{index}_{field}"
           for side in SIDES
           for index in range(1, HISTORY_LENGTH + 1)
-          for field in history_fields),
+          for field in HISTORY_FIELDS),
     ]
     records = []
 
@@ -66,7 +66,7 @@ def build_features(
                     )
                     # Keep the latest match in the final slot, even with short history.
                     for index, entry in enumerate(history, HISTORY_LENGTH + 1 - len(history)):
-                        for field, value in zip(history_fields, entry):
+                        for field, value in zip(HISTORY_FIELDS, entry):
                             record[f"{side}_match_{index}_{field}"] = value
                 record["history_complete"] = complete
                 records.append(record)

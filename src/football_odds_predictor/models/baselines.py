@@ -8,12 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 
 from ..data.dataset import TARGET_COLUMNS
-from ..data.features import HISTORY_LENGTH, MATCH_STATS, SIDES
-
-HISTORY_FIELDS = (
-    "was_home", "opponent_elo",
-    *(f"{stat}_{direction}" for stat in MATCH_STATS for direction in ("for", "against")),
-)
+from ..data.features import HISTORY_FIELDS, HISTORY_LENGTH, SIDES
 
 
 def median_predictions(train: pd.DataFrame) -> np.ndarray:

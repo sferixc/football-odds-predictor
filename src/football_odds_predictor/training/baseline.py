@@ -1,7 +1,7 @@
 """Evaluate closing-odds models on V1 validation folds.
 
 Run with no options for the median baseline. Pass --model ridge for Elo and
-form averages, or --model xgboost for Elo and each match in the history.
+form averages, --model xgboost for flat histories, or --model lstm for sequences.
 """
 
 import argparse
@@ -18,20 +18,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--features", type=Path, default=Path("data/processed/features.csv"))
     parser.add_argument("--matches", type=Path, default=Path("data/processed/matches.csv"))
-    parser.add_argument("--model", choices=("median", "ridge", "xgboost"), default="median")
+    parser.add_argument("--model", choices=("median", "ridge", "xgboost", "lstm"), default="median")
     parser.add_argument("--max-depth", type=int, default=3, help="Maximum XGBoost tree depth")
     parser.add_argument("--n-estimators", type=int, default=200, help="XGBoost trees per outcome")
     # parse_args() turns options such as --model ridge into args.model == "ridge".
     args = parser.parse_args()
     if args.model == "xgboost" and min(args.max_depth, args.n_estimators) < 1:
         parser.error("--max-depth and --n-estimators must be positive")
+    if args.model == "lstm":
+        import torch
+
+        from .lstm import lstm_predictions
+
+        torch.set_num_threads(1)
 
     dataset = load_dataset(args.features, args.matches)
     log_errors = []
     decimal_errors = []
     for season, train, validation in validation_folds(dataset):
         prediction_summary = ""
-        if args.model == "xgboost":
+        if args.model == "lstm":
+            predictions, epoch, train_mae = lstm_predictions(train, validation)
+            prediction_summary = f" | best epoch={epoch} | train log MAE={train_mae:.4f}"
+        elif args.model == "xgboost":
             predictions = xgboost_predictions(
                 train, validation, max_depth=args.max_depth, n_estimators=args.n_estimators,
             )

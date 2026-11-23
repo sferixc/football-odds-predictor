@@ -123,3 +123,20 @@ done
 | 4 | 0.1526 | 0.1505 | **0.1502** |
 
 **Worked example.** Depth 4 with 400 trees scored 0.1569, 0.1613, and 0.1324 on the three validation seasons. Their average was 0.1502 log-odds MAE, about 0.6% lower than the original depth 3 with 200 trees. It scored slightly worse than the original in 2022/23. Use the winning settings as the tuned comparison and keep the original command defaults for reproducing the first run. The 2025/26 season was held out.
+
+## Small LSTM
+
+**Question.** Does learning a representation of each five-match sequence improve on the tuned XGBoost?
+
+Run `uv run python -m football_odds_predictor.training.baseline --model lstm` on dataset `01551de`. A shared one-layer LSTM with 16 hidden units reads each team's five matches in order. A linear head uses the two resulting vectors and current Elo to predict three log closing odds. Fit feature scaling on each training fold. Start each fold from seed 42 and train on CPU with shuffled batches of 32 fixtures, mean squared error on log odds, and AdamW with learning rate 0.001 and weight decay 0.01. Train up to 100 epochs and retain predictions from the epoch with the lowest validation log-odds MAE. Stop after 12 epochs without improvement. Decimal predictions have a minimum of 1.01.
+
+**Worked example.** For Arsenal–Chelsea, the model reads Arsenal's sequence starting with the 4–1 and ending with the 1–4, plus Chelsea's five matches and the two current Elo ratings. It predicted **1.52 / 3.94 / 4.79** against actual odds **1.57 / 4.33 / 5.50**.
+
+| Validation | Best epoch | LSTM train log-odds MAE | LSTM validation log-odds MAE | Tuned XGBoost validation log-odds MAE |
+| --- | ---: | ---: | ---: | ---: |
+| 2022/23 | 32 | 0.1596 | 0.1620 | 0.1569 |
+| 2023/24 | 29 | 0.1499 | 0.1617 | 0.1613 |
+| 2024/25 | 23 | 0.1508 | 0.1497 | 0.1324 |
+| Fold mean | | | **0.1578** | **0.1502** |
+
+The LSTM's mean decimal-odds MAE was 0.6489. It improved on Ridge on average, and tuned XGBoost led on the primary metric in all three folds. This comparison covers one LSTM setup and seed. The 2025/26 test season remains reserved.
