@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Football Odds Dashboard</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;color:#162c30;background:#eef3f0;line-height:1.5;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}button,select,input{font:inherit}button,select{cursor:pointer}
+header{background:#132f2d;color:#f7fcfa;padding:18px 0}.wrap{width:min(1160px,calc(100% - 40px));margin-inline:auto}
+.brand{display:flex;align-items:center;gap:12px;font-weight:750}.mark{width:14px;height:14px;border:3px solid #9dec9f;border-radius:50%}
+main{padding-block:30px 55px}.overview{background:#193d37;color:white;border-radius:20px;padding:30px;display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,340px);gap:25px;align-items:center}
+h1,h2,p{margin:0}h1{font-size:clamp(1.85rem,4vw,3.05rem);line-height:1.12;letter-spacing:-.05em}
+#metadata{color:#d7e9e0;margin-top:10px;font-size:.92rem}.controls{display:grid;gap:12px}.control{display:grid;gap:4px}
+label{font-size:.875rem;font-weight:650}select,input{width:100%;padding:10px 38px 10px 12px;border:1px solid #cddbd3;background:#fff;color:#142d28;border-radius:9px}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#315951 50%),linear-gradient(135deg,#315951 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+input{padding-right:12px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:19px 0 14px}
+button{padding:8px 15px;border:1px solid #c8d7cf;border-radius:20px;background:#f9fcfa;color:#24443a;font-weight:650}
+button[aria-pressed=true]{background:#255445;color:#fff;border-color:#255445}
+#player-filter{max-width:340px;margin-bottom:12px}#status{color:#496258;margin-bottom:12px;min-height:1.5rem}
+.card{background:#fff;border:1px solid #dbe4de;border-radius:15px;margin-bottom:12px;overflow:hidden}
+.card-title{padding:15px 18px}.card-title p{color:#4b6458;font-size:.9rem;margin-top:3px}
+h2{font-size:1.05rem;letter-spacing:-.01em}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+th,td{padding:10px 14px;border-top:1px solid #e5ebe7}th{background:#f5f8f6;font-size:.875rem;color:#405d52}th:first-child,td:first-child{text-align:left;padding-left:18px}td{font-size:.95rem}.model{font-weight:750;color:#185643}
+.badge{font-size:.875rem;display:inline-block;text-align:center;font-weight:750;border-radius:6px;padding:3px 8px;min-width:70px;text-transform:capitalize}
+.red{background:#fbdad7;color:#851d23}.yellow{background:#fbefb5;color:#624900}.orange{background:#ffdcb8;color:#792d00}.green{background:#d0f2d5;color:#14542b}.purple{background:#e9ddfb;color:#552884}
+:focus-visible{outline:3px solid #76ae83;outline-offset:2px}[hidden]{display:none!important}
+@media(max-width:650px){.wrap{width:calc(100% - 24px)}main{padding-top:15px}.overview{grid-template-columns:1fr;padding:20px}th,td{padding:8px 10px}}
+</style>
+</head>
+<body>
+<header><div class="wrap brand"><span class="mark" aria-hidden="true"></span>Football Odds Dashboard</div></header>
+<main class="wrap">
+  <div class="overview">
+    <div><h1 id="fixture">Saved match offers</h1><p id="metadata"></p></div>
+    <div class="controls">
+      <div class="control"><label for="match">Match</label><select id="match"></select></div>
+      <div class="control"><label for="stress">Sensitivity scenario</label>
+        <select id="stress"><option value="0">No sensitivity adjustment</option><option value="5">−5 percentage points</option><option value="10">−10 percentage points</option></select>
+      </div>
+    </div>
+  </div>
+  <nav id="markets" class="toolbar" aria-label="Filter by market"></nav>
+  <div id="player-filter" class="control" hidden><label for="player">Find a player</label><input id="player" type="search" placeholder="Player name"></div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <div id="sections"></div>
+</main>
+<script>
+const match = document.querySelector('#match');
+const stress = document.querySelector('#stress');
+const status = document.querySelector('#status');
+const sections = document.querySelector('#sections');
+const player = document.querySelector('#player');
+const marketNames = { '1x2': '1X2', goals: 'Goals', cards: 'Yellow cards', corners: 'Corners', shots: 'Player shots' };
+const signals = new Set(['red', 'yellow', 'orange', 'green', 'purple']);
+let active = '1x2';
+let report = null;
+let requestId = 0;
+let matchList = '';
+
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+function timestamp(value) {
+  if (!value || value === 'untimed probe') return 'Untimed probe';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+function asOdds(value) { return value == null ? '—' : Number(value).toFixed(2); }
+function asPercent(value, signed = false) {
+  if (value == null) return '—';
+  return (signed && value > 0 ? '+' : '') + (value * 100).toFixed(1) + '%';
+}
+async function get(path) {
+  const response = await fetch(path);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Request failed.');
+  return data;
+}
+function render() {
+  sections.replaceChildren();
+  document.querySelector('#player-filter').hidden = active !== 'shots';
+  for (const button of document.querySelectorAll('#markets button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.group === active));
+  }
+  if (!report) return;
+  for (const section of report.sections.filter(section => section.group === active)) {
+    const card = element('section', undefined, 'card');
+    const title = element('div', undefined, 'card-title');
+    title.append(element('h2', section.name));
+    if (section.note) title.append(element('p', section.note));
+    card.append(title);
+    const shots = section.group === 'shots';
+    const query = player.value.trim().toLowerCase();
+    const rows = section.rows.filter(row => !shots || row.selection.toLowerCase().includes(query));
+    if (!rows.length) {
+      title.append(element('p', 'No matching selections.'));
+      sections.append(card);
+      continue;
+    }
+    const table = element('table');
+    const head = table.createTHead().insertRow();
+    const columns = shots ? ['Selection', 'Model odds', 'Superbet', 'Promo', 'Last result']
+      : ['Selection', 'Model odds', 'Superbet', 'Promo', 'Loss risk', 'Est. return', 'Prudent', 'Signal'];
+    for (const column of columns) head.append(element('th', column));
+    const body = table.createTBody();
+    for (const item of rows) {
+      const row = body.insertRow();
+      row.append(element('td', item.selection), element('td', asOdds(item.fair), 'model'),
+        element('td', asOdds(item.standard)), element('td', asOdds(item.promotion)));
+      if (shots) {
+        row.append(element('td', item.last_result));
+      } else {
+        row.append(element('td', asPercent(item.loss)), element('td', asPercent(item.return, true)),
+          element('td', asPercent(item.prudent, true)));
+        const signal = element('td');
+        signal.append(signals.has(item.signal) ? element('span', item.signal, 'badge ' + item.signal) : element('span', '—'));
+        row.append(signal);
+      }
+    }
+    const tableWrap = element('div', undefined, 'table-wrap');
+    tableWrap.append(table);
+    card.append(tableWrap);
+    sections.append(card);
+  }
+}
+async function loadReport() {
+  if (!match.value) return;
+  const id = ++requestId;
+  report = null;
+  render();
+  status.textContent = 'Loading match report…';
+  try {
+    const params = new URLSearchParams({ match: match.value, stress: stress.value });
+    const data = await get('/api/report?' + params);
+    if (id !== requestId) return;
+    report = data;
+    document.querySelector('#fixture').textContent = report.fixture;
+    const parts = ['Kickoff ' + timestamp(report.kickoff), 'Offer ' + timestamp(report.observed)];
+    if (report.last_results.length) parts.push('Team results through ' + report.last_results.join(' / '));
+    document.querySelector('#metadata').textContent = parts.join(' · ');
+    status.textContent = stress.value === '0' ? '' : 'Signals use the selected sensitivity scenario and the higher displayed price.';
+    render();
+  } catch (error) {
+    if (id === requestId) status.textContent = error.message;
+  }
+}
+async function refreshMatches() {
+  try {
+    const items = await get('/api/matches');
+    if (!items.length) {
+      status.textContent = 'No captures found. Keep the Superbet watcher running through a scheduled match.';
+      return;
+    }
+    const signature = JSON.stringify(items);
+    if (signature === matchList) return;
+    matchList = signature;
+    const previous = match.value;
+    match.replaceChildren();
+    for (const item of items) {
+      const option = element('option', item.name + (item.probe ? ' (probe)' : '') + ' · ' + timestamp(item.kickoff));
+      option.value = item.id;
+      match.append(option);
+    }
+    if (items.some(item => item.id === previous)) match.value = previous;
+    else await loadReport();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+for (const [group, label] of Object.entries(marketNames)) {
+  const button = element('button', label);
+  button.type = 'button';
+  button.dataset.group = group;
+  button.setAttribute('aria-pressed', String(group === active));
+  button.addEventListener('click', () => { active = group; render(); });
+  document.querySelector('#markets').append(button);
+}
+match.addEventListener('change', loadReport);
+stress.addEventListener('change', loadReport);
+player.addEventListener('input', render);
+refreshMatches();
+setInterval(refreshMatches, 30000);
+</script>
+</body>
+</html>

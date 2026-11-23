@@ -147,7 +147,9 @@ def _player_name(name: str) -> str:
     return "".join(letter for letter in decomposed if letter.isalnum())
 
 
-def player_report(event: dict, player_filter: str | None, promotions: list[dict], models: dict) -> None:
+def player_rows(
+    event: dict, player_filter: str | None, promotions: list[dict], models: dict,
+) -> tuple[list[dict], str]:
     """Show conditional shot probabilities and prices without scoring settlement risk."""
     _, zone, league = LEAGUES[int(event["fixture"]["tournament_id"])]
     kickoff = utc_timestamp(event["fixture"]["utc_date"]).astimezone(ZoneInfo(zone))
@@ -184,12 +186,10 @@ def player_report(event: dict, player_filter: str | None, promotions: list[dict]
             "mean_shots": recent["shots"].mean(), "last_match": recent["source_kickoff"].max().date(),
         }
 
-    print("\n[Player total shots] Probabilities conditional on playing. Offer value and color pending settlement checks.")
     if not rows:
-        print("No offered players with an unambiguous name and enough prior minutes.")
-        return
+        return [], "No offered players with an unambiguous name and enough prior minutes."
     features = pd.DataFrame.from_dict(rows, orient="index")
-    print(f"{'Player and selection':<43} {'Prob.':>7} {'Superbet':>9} {'Promo':>8} {'Last result':>12}")
+    results = []
     for threshold in PLAYER_LINES:
         probabilities = dict(zip(features.index, predict_saved(
             models, features, "shots", cutoff.date(), threshold,
@@ -208,64 +208,68 @@ def player_report(event: dict, player_filter: str | None, promotions: list[dict]
             side = line_selection(label, specifiers, threshold)
             if side and name in probabilities:
                 probability = probabilities[name] if side == "Peste" else 1 - probabilities[name]
-                promo = boosted.get((specifiers.get("player_id"), side))
-                promo_text = f"{promo:.2f}" if promo is not None else "—"
-                print(f"{label:<43} {probability:>7.1%} {price:>9.2f} "
-                      f"{promo_text:>8} {str(rows[name]['last_match']):>12}")
+                results.append({
+                    "selection": f"{name} · {'Over' if side == 'Peste' else 'Under'} {threshold:g}",
+                    "fair": float(1 / probability) if probability > 0 else None,
+                    "standard": price,
+                    "promotion": boosted.get((specifiers.get("player_id"), side)),
+                    "last_result": str(rows[name]["last_match"]),
+                })
+    note = "Model odds assume the player takes part. Value, loss risk, and color are pending settlement checks."
     if skipped:
-        print(f"Skipped {len(skipped)} players with ambiguous identity or insufficient prior minutes.")
+        note += f" Skipped {len(skipped)} players with ambiguous identity or insufficient prior minutes."
+    return results, note
 
 
-def print_selections(
-    label: str, selections: tuple[str, ...], probabilities: np.ndarray,
-    prices: dict, promotions: dict, stress: Decimal | None, highlighted: bool = False,
-) -> None:
-    print(f"\n[{label}]")
-    print(f"{'Selection':<10} {'Win':>7} {'Loss':>7} {'Fair':>7} {'Superbet':>9} {'Promo':>8} "
-          f"{'Est. return':>12} {'Prudent':>9} {'Color':>8}")
+def selection_rows(selections, probabilities, prices, promotions, stress) -> list[dict]:
+    """Return display-ready values shared by the terminal and dashboard."""
+    rows = []
     for selection, probability in zip(selections, probabilities):
         p = Decimal(str(probability))
         standard, promoted = prices.get(selection), promotions.get(selection)
         available = [price for price in (standard, promoted) if price is not None]
-        returns = conservative = signal = "—"
+        row = {
+            "selection": {"Sub": "Under", "Peste": "Over"}.get(selection, selection),
+            "loss": float(1 - p),
+            "fair": float(1 / p) if p > 0 else None, "standard": standard,
+            "promotion": promoted, "return": None, "prudent": None, "signal": None,
+        }
         if available and p > 0:
             score = assess_offer(
                 odds=Decimal(str(max(available))), win_probability=p,
                 conservative_win_probability=p if stress is None else max(Decimal(0), p - stress),
                 stake=Decimal(1), budget=Decimal(1),
             )
-            returns = f"{score.expected_return:+.1%}"
+            row["return"] = float(score.expected_return)
             if stress is not None:
-                conservative, signal = f"{score.conservative_return:+.1%}", score.signal
-        standard_text = f"{standard:.2f}" if standard is not None else "—"
-        promoted_text = f"{promoted:.2f}" if promoted is not None else "—"
-        fair = f"{1 / p:.2f}" if p > 0 else "—"
-        print(f"{selection:<10} {p:>7.1%} {1 - p:>7.1%} {fair:>7} "
-              f"{standard_text:>9} {promoted_text:>8} "
-              f"{returns:>12} {conservative:>9} {color_badge(signal, highlighted)}")
+                row["prudent"] = float(score.conservative_return)
+                row["signal"] = score.signal
+        rows.append(row)
+    return rows
 
 
-def print_report(
+def build_report(
     event: dict, observed: str, stress: Decimal | None, models: dict,
-    groups: tuple[str, ...] = GROUPS, player_filter: str | None = None, highlighted: bool = False,
-) -> None:
+    groups: tuple[str, ...] = GROUPS, player_filter: str | None = None,
+) -> dict:
+    """Build market sections from one snapshot and the saved models."""
     fixture = event["fixture"]
     if int(fixture["tournament_id"]) not in LEAGUES:
         raise ValueError("This report covers Premier League, Bundesliga, and La Liga")
-    print(f"{fixture['event_name'].replace('·', ' – ')} | kickoff {fixture['utc_date']}")
-    print(f"Offer: {observed}")
-    if observed == "untimed probe":
-        print("Replay of an untimed offer. Probabilities use the local results archive.")
-    if stress is not None:
-        print(f"Provisional color uses a {stress * 100:g} percentage-point reduction.")
-    print("Return is calculated at the higher displayed price.")
+    report = {
+        "fixture": fixture["event_name"].replace("·", " – "),
+        "kickoff": fixture["utc_date"], "observed": observed,
+        "stress_pp": float(stress * 100) if stress is not None else None,
+        "last_results": [], "sections": [],
+    }
+    sections = report["sections"]
     promotions = simple_promotions(event)
     zone = LEAGUES[int(fixture["tournament_id"])][1]
     cutoff = utc_timestamp(fixture["utc_date"]).astimezone(ZoneInfo(zone)).date()
 
     if any(group != "shots" for group in groups):
         current, last_matches = team_inputs_for_event(event)
-        print(f"Latest team results used (home / away): {' / '.join(str(d.date()) for d in last_matches)}")
+        report["last_results"] = [str(result.date()) for result in last_matches]
         if "1x2" in groups:
             prices = {
                 odd["metadata"]["name"]: odd["price"]
@@ -277,24 +281,63 @@ def print_report(
                 if offer["market"] == "1x2":
                     selection = offer["selection"]
                     boosted[selection] = max(boosted.get(selection, 0), offer["odds"])
-            print_selections(
-                "Full-time result", ("1", "X", "2"),
-                predict_saved(models, current, "1x2", cutoff)[0], prices, boosted, stress, highlighted,
-            )
+            sections.append({
+                "group": "1x2", "name": "Full-time result",
+                "rows": selection_rows(("1", "X", "2"),
+                                       predict_saved(models, current, "1x2", cutoff)[0],
+                                       prices, boosted, stress),
+            })
 
         for group in groups:
             for market_id, target, label in TEAM_MARKETS.get(group, ()):
                 threshold = TEAM_THRESHOLDS[target]
                 standard, boosted = team_prices(event, market_id, target, threshold, promotions)
                 probabilities = predict_saved(models, current, target, cutoff, threshold)[0]
-                print_selections(
-                    f"{label} ({threshold:g})", ("Sub", "Peste"), probabilities,
-                    standard, boosted, stress, highlighted,
-                )
-            if group == "cards":
-                print("Yellow-card probabilities only. Superbet total cards has a separate settlement definition.")
+                sections.append({
+                    "group": group, "name": f"{label} ({threshold:g})",
+                    "rows": selection_rows(("Sub", "Peste"), probabilities, standard, boosted, stress),
+                    "note": "Superbet total cards has a separate settlement definition." if group == "cards" else "",
+                })
     if "shots" in groups:
-        player_report(event, player_filter, promotions, models)
+        rows, note = player_rows(event, player_filter, promotions, models)
+        sections.append({"group": "shots", "name": "Player total shots", "rows": rows, "note": note})
+    return report
+
+
+def print_report(
+    event: dict, observed: str, stress: Decimal | None, models: dict,
+    groups: tuple[str, ...] = GROUPS, player_filter: str | None = None, highlighted: bool = False,
+) -> None:
+    report = build_report(event, observed, stress, models, groups, player_filter)
+    print(f"{report['fixture']} | kickoff {report['kickoff']}")
+    print(f"Offer: {observed}")
+    if observed == "untimed probe":
+        print("Replay of an untimed offer. Probabilities use the local results archive.")
+    if stress is not None:
+        print(f"Provisional color uses a {stress * 100:g} percentage-point reduction.")
+    print("Return is calculated at the higher displayed price.")
+    if report["last_results"]:
+        print(f"Latest team results used (home / away): {' / '.join(report['last_results'])}")
+
+    def fmt(value, style):
+        return format(value, style) if value is not None else "—"
+
+    for section in report["sections"]:
+        print(f"\n[{section['name']}]")
+        if section["group"] == "shots":
+            print(f"{'Player and selection':<43} {'Model odds':>10} {'Superbet':>9} {'Promo':>8} {'Last result':>12}")
+            for row in section["rows"]:
+                print(f"{row['selection']:<43} {fmt(row['fair'], '.2f'):>10} {fmt(row['standard'], '.2f'):>9} "
+                      f"{fmt(row['promotion'], '.2f'):>8} {row['last_result']:>12}")
+        else:
+            print(f"{'Selection':<10} {'Model odds':>10} {'Superbet':>9} {'Promo':>8} {'Loss risk':>9} "
+                  f"{'Est. return':>12} {'Prudent':>9} {'Signal':>8}")
+            for row in section["rows"]:
+                print(f"{row['selection']:<10} {fmt(row['fair'], '.2f'):>10} {fmt(row['standard'], '.2f'):>9} "
+                      f"{fmt(row['promotion'], '.2f'):>8} {row['loss']:>9.1%} {fmt(row['return'], '+.1%'):>12} "
+                      f"{fmt(row['prudent'], '+.1%'):>9} {color_badge(row['signal'] or '—', highlighted)}")
+        if section.get("note"):
+            print(section["note"])
 
 
 def main() -> None:

@@ -112,7 +112,7 @@ uv run python -m football_odds_predictor.training.fit_sporting
 
 This writes `data/processed/sporting-models.pkl`, including fitted classifiers, scalers, input columns, and historical frequencies where that baseline won. Keep the file local and load only an artifact you generated yourself. Refit when the training data or model settings change.
 
-The report reads the saved models and recreates Elo and form using earlier match dates. For matching team markets it prints probability, fair odds, the standard price and promotion, estimated return at the higher displayed price, and the chance of losing. It shows the most recent result date used for each team and player.
+The report reads the saved models and recreates Elo and form using earlier match dates. For matching team markets it prints model odds, the standard price and promotion, estimated return at the higher displayed price, and the chance of losing. It shows the most recent result date used for each team and player.
 
 ```bash
 uv run python -m football_odds_predictor.evaluation.superbet_report
@@ -120,7 +120,7 @@ uv run python -m football_odds_predictor.evaluation.superbet_report
 
 The command opens the most recently saved capture in `data/raw/superbet/`. Pass a path to choose another capture. Options `--market 1x2`, `--market goals`, `--market cards`, `--market corners`, and `--market shots` filter sections. Use `--player 'Dewsbury-Hall'` to see one player's selections. Add `--stress-pp 5` to see provisional colors on comparable team offers using a five-percentage-point reduction in probability. The default leaves colors unset until there is calibration evidence.
 
-The team sections need the original training files, the 2020/21 Elo warm-up files, and 2026/27 results in `data/raw/football-data-2627/`. Team names must match the archive. The player section uses the xGTables archive and shows probabilities conditional on playing, alongside available prices. It leaves value and colors unset until participation and settlement are modeled. The yellow-card section shows probabilities and fair odds. Superbet's total-cards prices remain separate pending rule mapping. Supported lines are the fixed thresholds evaluated below.
+The team sections need the original training files, the 2020/21 Elo warm-up files, and 2026/27 results in `data/raw/football-data-2627/`. Team names must match the archive. The player section uses the xGTables archive and shows model odds conditional on playing, alongside available prices. It leaves value and colors unset until participation and settlement are modeled. The yellow-card section shows model odds. Superbet's total-cards prices remain separate pending rule mapping. Supported lines are the fixed thresholds evaluated below.
 
 **Worked example.** An untimed Brentford–Everton probe gave a home-win probability of 45.1%, with a SuperCota of 2.40 and an estimated return of +8.2%. A five-point reduction gives −3.8%, or yellow. It gave Kiernan Dewsbury-Hall a 29.6% chance of more than 1.5 shots if he played, with an observed price of 1.48. The latest inputs were from November for the teams and May for the player. Treat this as a reproduction example.
 

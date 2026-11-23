@@ -1,6 +1,6 @@
 # Contributing to football-odds-predictor
 
-Set up the project, reproduce the experiments, and generate a Superbet report in the terminal. Start with a clone of the repository. The processed match and feature CSVs are included in the clone. The raw inputs, saved models, and offer snapshots are local to each contributor.
+Set up the project, reproduce the experiments, and view a Superbet match report. Start with a clone of the repository. The processed match and feature CSVs are included in the clone. The raw inputs, saved models, and offer snapshots are local to each contributor.
 
 ## 1. Clone and install
 
@@ -53,13 +53,13 @@ uv run python -m football_odds_predictor.training.sporting
 
 The first two commands print Bet365 odds errors for validation and the final test. The sporting command prints validation log loss and Brier scores. To reproduce the Bet365 replay on recent fixtures, run `uv run python -m football_odds_predictor.evaluation.recent` with the recent and warm-up folders populated.
 
-To prepare the terminal report, fit the selected sporting models once:
+To prepare the match reports, fit the selected sporting models once:
 
 ```bash
 uv run python -m football_odds_predictor.training.fit_sporting
 ```
 
-Expect `Saved 13 trained models to data/processed/sporting-models.pkl`. Every contributor generates this file locally. The report loads it on each run. Refit when the training data or model settings change. Load only a model file you generated yourself.
+Expect `Saved 13 trained models to data/processed/sporting-models.pkl`. Every contributor generates this file locally. The dashboard loads it at startup. Refit when the training data or model settings change. Load only a model file you generated yourself.
 
 To reproduce the [sporting calibration and final test](docs/superbet-assessment.md#calibration-check-and-final-sporting-test), run:
 
@@ -81,7 +81,17 @@ uv run python -m football_odds_predictor.data.superbet_watch
 
 The watcher discovers fixtures and attempts a capture about 15 minutes before kickoff. On success it prints `Saved … markets and … simple promotions to data/raw/superbet/<event-id>.json`. The accepted window is 10–20 minutes before kickoff. Stop the watcher with **Ctrl+C**.
 
-## 5. Read the report in the terminal
+## 5. Browse match reports
+
+Start the dashboard from the project folder:
+
+```bash
+uv run python -m football_odds_predictor.evaluation.dashboard
+```
+
+Open [the local dashboard](http://127.0.0.1:8765). Choose a match and a market tab, or use the player filter in Player shots. New captures appear in the match list automatically while the watcher runs separately. Restart the dashboard after regenerating the model file or updating the historical results.
+
+### Optional terminal report
 
 Open a second terminal in the project folder:
 
@@ -95,15 +105,14 @@ The output starts with kickoff and capture time, then groups selections by marke
 
 ```text
 [Match goals (2.5)]
-Selection      Win    Loss    Fair  Superbet    Promo  Est. return   Prudent    Color
-Peste        59.8%   40.2%    1.67      1.85        —        +10.6%     +1.4%   orange
+Selection  Model odds   Superbet    Promo  Loss risk  Est. return   Prudent    Signal
+Over             1.67       1.85        —      40.2%       +10.6%     +1.4%    orange
 ```
 
-- **Win / Loss** show the model's probabilities for the selection.
-- **Fair** is the estimated break-even decimal price. **Superbet / Promo** show the standard and matching promotional prices.
+- **Model odds** are the estimated break-even decimal price. **Loss risk** is the estimated chance of losing. **Superbet / Promo** show the standard and matching promotional prices.
 - **Est. return** uses the higher displayed price. **Prudent / Color** appear when you pass a sensitivity setting such as `--stress-pp 5`, which reduces the win probability by five percentage points. The colors are provisional.
 - Signal labels have colored backgrounds in interactive terminals. Use `--color always` to force highlighting or `--color never` for plain text.
-- The yellow-card section shows model estimates pending settlement mapping. Player shot probabilities are conditional on playing. Check the latest team and player result dates printed by the report.
+- The yellow-card section shows model estimates pending settlement mapping. Player shot model odds assume the player takes part. Check the latest team and player result dates printed by the report.
 
 If you see **No saved captures yet**, leave the watcher running through an eligible fixture. If you see **Model file missing**, run the one-time fit in step 3. If a team cannot be matched or has incomplete history, check the results files and their team names.
 
