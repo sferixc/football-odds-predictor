@@ -104,7 +104,15 @@ uv run python -m football_odds_predictor.evaluation.offer --odds 1.90 \
 
 ### Terminal report
 
-The report takes a saved snapshot, recreates Elo and form using earlier match dates, and fits the selected model for each supported line on 2021/22–2024/25. For matching team markets it prints probability, fair odds, the standard price and promotion, estimated return at the higher displayed price, and the chance of losing. It shows the most recent result date used for each team and player.
+Train the selected models once on 2021/22–2024/25 and save them locally:
+
+```bash
+uv run python -m football_odds_predictor.training.fit_sporting
+```
+
+This writes `data/processed/sporting-models.pkl`, including fitted classifiers, scalers, input columns, and historical frequencies where that baseline won. Keep the file local and load only an artifact you generated yourself. Refit when the training data or model settings change.
+
+The report reads the saved models and recreates Elo and form using earlier match dates. For matching team markets it prints probability, fair odds, the standard price and promotion, estimated return at the higher displayed price, and the chance of losing. It shows the most recent result date used for each team and player.
 
 ```bash
 uv run python -m football_odds_predictor.evaluation.superbet_report
@@ -121,7 +129,7 @@ uv run python -m football_odds_predictor.evaluation.superbet_report \
   data/raw/superbet-probes/14656294.json --probe --stress-pp 5
 ```
 
-The report fits on demand and runs independently of the watcher. Automatic reporting, saved models, fresh player results, and calibration remain open.
+The report runs independently of the watcher. Automatic reporting, fresh player results, and calibration remain open. Calibration asks whether comparable predictions near 60% actually occur about 60% of the time. Assess it by probability band on out-of-sample data. The final test scores the frozen sporting models on 2025/26 after selecting the evaluation and calibration procedures.
 
 ## First sporting model comparison
 

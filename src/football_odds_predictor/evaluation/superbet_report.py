@@ -1,30 +1,26 @@
 """Report supported football selections alongside one captured Superbet offer."""
 
 import argparse
+from datetime import date
 from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
+import pickle
 import re
 import unicodedata
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier
 
-from ..data.dataset import FIRST_SEASON, TEST_SEASON
 from ..data.features import build_features
 from ..data.preprocessing import load_matches
 from ..data.sporting import (
-    player_features, read_player_appearances, read_team_matches, team_dataset, team_features,
+    read_player_appearances, read_team_matches, team_features,
 )
 from ..data.superbet_snapshot import check_window, open_price, simple_promotions, utc_timestamp
-from ..training.sporting import (
-    TEAM_THRESHOLDS, XGB_SETTINGS, add_team_outcomes, fit_epoch_classifier,
-)
+from ..training.fit_sporting import DEFAULT_MODELS, PLAYER_LINES
+from ..training.sporting import TEAM_THRESHOLDS
 from .offer import assess_offer
 
 LEAGUES = {
@@ -35,19 +31,19 @@ LEAGUES = {
 RAW = Path("data/raw")
 TEAM_MARKETS = {
     "goals": (
-        (200734, "match_goals", "Match goals", "sgd"),
-        (200735, "first_half_goals", "First-half goals", "frequency"),
-        (200738, "second_half_goals", "Second-half goals", "sgd"),
+        (200734, "match_goals", "Match goals"),
+        (200735, "first_half_goals", "First-half goals"),
+        (200738, "second_half_goals", "Second-half goals"),
     ),
     "cards": (
-        (None, "home_yellows", "Home yellow cards", "sgd"),
-        (None, "away_yellows", "Away yellow cards", "sgd"),
-        (None, "match_yellows", "Match yellow cards", "sgd"),
+        (None, "home_yellows", "Home yellow cards"),
+        (None, "away_yellows", "Away yellow cards"),
+        (None, "match_yellows", "Match yellow cards"),
     ),
     "corners": (
-        (704, "match_corners", "Match corners", "sgd"),
-        (713, "home_corners", "Home corners", "logistic"),
-        (733, "away_corners", "Away corners", "xgboost"),
+        (704, "match_corners", "Match corners"),
+        (713, "home_corners", "Home corners"),
+        (733, "away_corners", "Away corners"),
     ),
 }
 GROUPS = ("1x2", "goals", "cards", "corners", "shots")
@@ -66,7 +62,7 @@ def read_snapshot(path: Path, probe: bool) -> tuple[dict, str]:
     raise ValueError("Expected a timed snapshot. Use --probe for a single untimed test response.")
 
 
-def team_inputs_for_event(event: dict) -> tuple[pd.DataFrame, pd.DataFrame, list[pd.Timestamp]]:
+def team_inputs_for_event(event: dict) -> tuple[pd.DataFrame, list[pd.Timestamp]]:
     fixture = event["fixture"]
     league, zone, _ = LEAGUES[int(fixture["tournament_id"])]
     kickoff = utc_timestamp(fixture["utc_date"]).astimezone(ZoneInfo(zone))
@@ -101,42 +97,20 @@ def team_inputs_for_event(event: dict) -> tuple[pd.DataFrame, pd.DataFrame, list
     if current.isna().any().any():
         raise ValueError("The fixture is missing complete five-match inputs")
 
-    dataset, _ = team_dataset(Path("data/processed/features.csv"), RAW / "football-data")
-    add_team_outcomes(dataset)
-    train = dataset.loc[
-        dataset["season_start_year"].ge(FIRST_SEASON)
-        & dataset["season_start_year"].lt(TEST_SEASON)
-        & dataset["source_kickoff"].lt(cutoff)
-    ]
-    return train, current, last_matches
+    return current, last_matches
 
 
-def predict(
-    train: pd.DataFrame, current: pd.DataFrame, target: str, model_type: str,
-    threshold: float | None = None,
+def predict_saved(
+    models: dict, current: pd.DataFrame, target: str, cutoff: date, threshold: float | None = None,
 ) -> np.ndarray:
-    """Fit the validation-selected candidate for this exact target and line."""
-    inputs = list(current.columns)
-    train = train.dropna(subset=[*inputs, target])
-    labels = train[target] if threshold is None else train[target].gt(threshold)
-    y = labels.to_numpy(dtype=int)
-    x = train[inputs].to_numpy()
-    current_x = current.to_numpy()
-    classes = np.arange(3 if threshold is None else 2)
-    if not np.array_equal(np.unique(y), classes):
-        raise ValueError(f"Training data is missing classes for {target}")
-    if model_type == "frequency":
-        return np.broadcast_to(np.bincount(y) / len(y), (len(current), len(classes)))
-    if model_type == "sgd":
-        scaler, model, _ = fit_epoch_classifier(
-            x, y, train["source_kickoff"].dt.normalize(), classes,
-        )
-        return model.predict_proba(scaler.transform(current_x))
-    model = (
-        XGBClassifier(**XGB_SETTINGS) if model_type == "xgboost"
-        else make_pipeline(StandardScaler(), LogisticRegression())
-    )
-    return model.fit(x, y).predict_proba(current_x)
+    """Run the saved classifier using its recorded input column order."""
+    model = models[(target, threshold)]
+    if model["training_end"] >= cutoff:
+        raise ValueError("The fixture date must follow the fitted model's training period")
+    inputs = current[model["inputs"]].to_numpy()
+    if model["frequency"] is not None:
+        return np.broadcast_to(model["frequency"], (len(current), len(model["frequency"])))
+    return model["estimator"].predict_proba(inputs)
 
 
 def line_selection(name: str, specifiers: dict, threshold: float) -> str | None:
@@ -173,15 +147,13 @@ def _player_name(name: str) -> str:
     return "".join(letter for letter in decomposed if letter.isalnum())
 
 
-def player_report(event: dict, player_filter: str | None, promotions: list[dict]) -> None:
+def player_report(event: dict, player_filter: str | None, promotions: list[dict], models: dict) -> None:
     """Show conditional shot probabilities and prices without scoring settlement risk."""
     _, zone, league = LEAGUES[int(event["fixture"]["tournament_id"])]
     kickoff = utc_timestamp(event["fixture"]["utc_date"]).astimezone(ZoneInfo(zone))
     cutoff = pd.Timestamp(kickoff.date())
     history = read_player_appearances(RAW / "xgtables-understat")
     history = history.loc[history["source_kickoff"].lt(cutoff)]
-    dataset, columns = player_features(history)
-    train = dataset.loc[dataset["season_start_year"].between(FIRST_SEASON, TEST_SEASON - 1)]
     league_history = history.loc[history["league"].eq(league)].copy()
     league_history["name_key"] = league_history["player"].map(_player_name)
     offers = []
@@ -218,9 +190,9 @@ def player_report(event: dict, player_filter: str | None, promotions: list[dict]
         return
     features = pd.DataFrame.from_dict(rows, orient="index")
     print(f"{'Player and selection':<43} {'Prob.':>7} {'Superbet':>9} {'Promo':>8} {'Last result':>12}")
-    for threshold in (0.5, 1.5, 2.5):
-        probabilities = dict(zip(features.index, predict(
-            train, features[columns], "shots", "xgboost", threshold,
+    for threshold in PLAYER_LINES:
+        probabilities = dict(zip(features.index, predict_saved(
+            models, features, "shots", cutoff.date(), threshold,
         )[:, 1]))
         boosted = {}
         for offer in promotions:
@@ -274,7 +246,7 @@ def print_selections(
 
 
 def print_report(
-    event: dict, observed: str, stress: Decimal | None,
+    event: dict, observed: str, stress: Decimal | None, models: dict,
     groups: tuple[str, ...] = GROUPS, player_filter: str | None = None,
 ) -> None:
     fixture = event["fixture"]
@@ -288,9 +260,11 @@ def print_report(
         print(f"Provisional color uses a {stress * 100:g} percentage-point reduction.")
     print("Return is calculated at the higher displayed price.")
     promotions = simple_promotions(event)
+    zone = LEAGUES[int(fixture["tournament_id"])][1]
+    cutoff = utc_timestamp(fixture["utc_date"]).astimezone(ZoneInfo(zone)).date()
 
     if any(group != "shots" for group in groups):
-        train, current, last_matches = team_inputs_for_event(event)
+        current, last_matches = team_inputs_for_event(event)
         print(f"Latest team results used (home / away): {' / '.join(str(d.date()) for d in last_matches)}")
         if "1x2" in groups:
             prices = {
@@ -305,14 +279,14 @@ def print_report(
                     boosted[selection] = max(boosted.get(selection, 0), offer["odds"])
             print_selections(
                 "Full-time result", ("1", "X", "2"),
-                predict(train, current, "1x2", "sgd")[0], prices, boosted, stress,
+                predict_saved(models, current, "1x2", cutoff)[0], prices, boosted, stress,
             )
 
         for group in groups:
-            for market_id, target, label, model in TEAM_MARKETS.get(group, ()):
+            for market_id, target, label in TEAM_MARKETS.get(group, ()):
                 threshold = TEAM_THRESHOLDS[target]
                 standard, boosted = team_prices(event, market_id, target, threshold, promotions)
-                probabilities = predict(train, current, target, model, threshold)[0]
+                probabilities = predict_saved(models, current, target, cutoff, threshold)[0]
                 print_selections(
                     f"{label} ({threshold:g})", ("Sub", "Peste"), probabilities,
                     standard, boosted, stress,
@@ -320,12 +294,13 @@ def print_report(
             if group == "cards":
                 print("Yellow-card probabilities only. Superbet total cards has a separate settlement definition.")
     if "shots" in groups:
-        player_report(event, player_filter, promotions)
+        player_report(event, player_filter, promotions, models)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("snapshot", type=Path, nargs="?", help="Defaults to the most recently saved capture")
+    parser.add_argument("--models", type=Path, default=DEFAULT_MODELS, help="Locally trained model file")
     parser.add_argument("--probe", action="store_true", help="Allow a single untimed test response")
     parser.add_argument("--stress-pp", type=Decimal, help="Optional probability reduction in percentage points")
     parser.add_argument("--market", action="append", choices=GROUPS, help="Show only this market group")
@@ -346,8 +321,12 @@ def main() -> None:
                 raise ValueError("No saved captures yet. Run the watcher or pass a snapshot path.")
         event, observed = read_snapshot(snapshot, args.probe)
         groups = tuple(dict.fromkeys(args.market)) if args.market else (("shots",) if args.player else GROUPS)
-        print_report(event, observed, stress / 100 if stress is not None else None, groups, args.player)
-    except (InvalidOperation, KeyError, OSError, ValueError) as error:
+        if not args.models.is_file():
+            raise ValueError("Model file missing. First run football_odds_predictor.training.fit_sporting.")
+        with args.models.open("rb") as handle:
+            models = pickle.load(handle)
+        print_report(event, observed, stress / 100 if stress is not None else None, models, groups, args.player)
+    except (InvalidOperation, KeyError, OSError, ValueError, pickle.UnpicklingError, EOFError) as error:
         parser.error(str(error))
 
 
