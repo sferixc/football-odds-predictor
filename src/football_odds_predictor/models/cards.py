@@ -23,7 +23,7 @@ def load_card_models(models: dict) -> None:
 def card_probabilities(bundle, current, target, cutoff, referee):
     """Use referee history when a named pre-match referee has prior results."""
     if bundle is None or target not in bundle["models"] or cutoff <= bundle["training_end"]:
-        return None, None
+        return None, False, 0
     history = bundle["referee_history"]
     prior = history.loc[
         history["referee"].str.casefold().eq(referee.strip().casefold())
@@ -34,4 +34,4 @@ def card_probabilities(bundle, current, target, cutoff, referee):
     variant = bundle["models"][target]["referee" if with_referee else "team"]
     inputs = current.assign(**{REFEREE_INPUT: mean})[variant["inputs"]]
     expected_count = variant["estimator"].predict(inputs)[0]
-    return poisson.sf(CARD_LINES, expected_count), with_referee
+    return poisson.sf(CARD_LINES, expected_count), with_referee, int(prior.count())

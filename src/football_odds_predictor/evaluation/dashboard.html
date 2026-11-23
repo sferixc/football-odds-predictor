@@ -20,6 +20,7 @@ button[aria-pressed=true]{color:#172f26;border-bottom-color:#294b39}
 .fixture-list{display:flex;flex-wrap:wrap;gap:9px;margin:10px 0 20px}.fixture-button{display:grid;gap:2px;text-align:left;background:#fff;border:1px solid #dce4df;border-radius:8px;padding:10px 13px;color:#202724;min-width:210px}.fixture-button:hover,.fixture-button[aria-pressed=true]{border-color:#397456;background:#f0f7f2}.fixture-button small{color:#62746a}.fixture-button .time{font-weight:700}.empty-day{padding:14px 16px;background:#fff;border:1px solid #dddfd7;border-radius:7px;color:#526158}
 .card{background:#fff;border:1px solid #dddfd7;border-radius:6px;margin-bottom:16px;overflow:hidden}
 .card-title{padding:15px 18px}.card-title p{color:#4b6458;font-size:.9rem;margin-top:3px}
+.card-title .referee-note{color:#263e33;font-weight:700;margin-top:6px}
 h2{font-size:1.05rem;letter-spacing:-.01em}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 th,td{padding:10px 14px;border-top:1px solid #e5ebe7}th{background:#f5f8f6;font-size:.875rem;color:#405d52}th:first-child,td:first-child{text-align:left;padding-left:18px}td{font-size:.95rem}.model{font-weight:750;color:#185643}
 .badge{font-size:.875rem;display:inline-block;text-align:center;font-weight:750;border-radius:6px;padding:3px 8px;min-width:70px;text-transform:capitalize}
@@ -113,6 +114,7 @@ function displaySections(rawSections) {
     const table = cards.get(scope);
     if (!section.quote_only) {
       table.note = section.note;
+      table.refereeNote = section.referee_note;
       table.proxy = section.proxy;
     }
     for (const item of section.rows) {
@@ -138,6 +140,7 @@ function displaySections(rawSections) {
       group: 'cards',
       name: scope[0].toUpperCase() + scope.slice(1) + (table.proxy ? ' total cards (proxy)' : ' cards'),
       note: table.note,
+      refereeNote: table.refereeNote,
       rows: [...table.rows.values()].sort((a, b) =>
         a.threshold - b.threshold || b.direction.localeCompare(a.direction)),
     })),
@@ -160,6 +163,7 @@ function render() {
     const title = element('div', undefined, 'card-title');
     title.append(element('h2', section.name));
     if (section.group === 'shots' && !section.quote_only) title.append(element('p', 'Model odds assume the player takes part.'));
+    if (section.refereeNote) title.append(element('p', section.refereeNote, 'referee-note'));
     if (section.note) title.append(element('p', section.note));
     if (section.quote_only || (section.group === 'cards' && report.competition && !report.european_card_model)) {
       title.append(element('p', 'Superbet prices only. Model data unavailable for this market.'));

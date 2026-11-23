@@ -64,7 +64,7 @@ def predict_ucl(bundle, fixture, kickoff, competition="CL", referee=None):
             expected = variants["referee"].predict([[*x[0], prior[1] / prior[2]]])[0]
         else:
             expected = variants["team"].predict(x)[0]
-        card_forecasts[scope] = (float(expected), use_referee)
+        card_forecasts[scope] = (float(expected), use_referee, int(prior[2]) if prior else 0)
     return (
         models["result"].predict_proba(x)[0], float(models["goals"].predict(x)[0]),
         last_dates, all(team in bundle["domestic"] for team in (home, away)), card_forecasts,

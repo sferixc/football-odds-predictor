@@ -24,7 +24,7 @@ from ..data.superbet_snapshot import EUROPEAN_TOURNAMENTS, check_window, open_pr
 from ..models.cards import CARD_LINES, load_card_models, card_probabilities
 from ..models.corners import CORNER_LINES, corner_probabilities, european_corner_inputs, load_corner_models
 from ..models.sporting import predict_saved as predict_saved
-from ..models.ucl import goal_probabilities, load_ucl_models, predict_ucl
+from ..models.ucl import MIN_REFEREE_MATCHES, goal_probabilities, load_ucl_models, predict_ucl
 from ..training.fit_sporting import DEFAULT_MODELS, PLAYER_LINES
 from ..training.sporting import TEAM_THRESHOLDS
 from .offer import assess_offer
@@ -356,6 +356,18 @@ def corner_sections(event, bundle, league, current, cutoff, promotions, stress):
     return sections
 
 
+def referee_note(referee, used, count, minimum=1):
+    if not isinstance(referee, str) or not referee.strip():
+        return "Team model only · referee assignment unavailable"
+    referee = referee.strip()
+    matches = f"{count} prior {'match' if count == 1 else 'matches'}"
+    if used:
+        return f"Referee used · {referee} · {matches}"
+    if count < minimum:
+        return f"Team model only · {referee} · {matches}, need at least {minimum}"
+    return f"Team model only · {referee} · referee model unavailable for this market"
+
+
 def build_report(
     event: dict, observed: str, stress: Decimal | None, models: dict,
     groups: tuple[str, ...] = GROUPS, player_filter: str | None = None,
@@ -419,7 +431,7 @@ def build_report(
                 for market, scope in CARD_OFFER_MARKETS.items():
                     if scope not in card_forecasts:
                         continue
-                    expected, uses_referee = card_forecasts[scope]
+                    expected, uses_referee, prior_matches = card_forecasts[scope]
                     rows = []
                     quotes = next((section["rows"] for section in report["sections"]
                                    if section.get("card_scope") == scope), ())
@@ -438,9 +450,8 @@ def build_report(
                     report["sections"].append({
                         "group": "cards", "card_scope": scope, "name": f"{scope.title()} total cards",
                         "rows": rows, "quote_only": False,
-                        "note": "Card totals reconstructed from events and lineups. " + (
-                            "Uses the referee's prior matches." if uses_referee else "Uses team inputs."
-                        ),
+                        "note": "Card totals reconstructed from events and lineups.",
+                        "referee_note": referee_note(referee, uses_referee, prior_matches, MIN_REFEREE_MATCHES),
                     })
                 report["european_card_model"] = bool(card_forecasts)
             report["last_results"] = last_dates
@@ -493,7 +504,7 @@ def build_report(
                     bundle = models.get("yellow_card_counts", {}).get(league)
                     proxy = bundle is not None and f"{scope}_card_points" in bundle["models"]
                     forecast = f"{scope}_card_points" if proxy else target
-                    overs, with_referee = card_probabilities(
+                    overs, with_referee, prior_matches = card_probabilities(
                         bundle, current, forecast, cutoff, referee,
                     )
                     if overs is not None:
@@ -515,7 +526,8 @@ def build_report(
                                 "Estimated total uses aggregate yellows + 2 × reds. "
                                 "Second yellows and bench cards may differ from settlement."
                                 if proxy else "Model estimates for yellow cards only."
-                            ) + (" Includes referee history." if with_referee else " Team inputs only."),
+                            ),
+                            "referee_note": referee_note(referee, with_referee, prior_matches),
                         })
                         continue
                 threshold = TEAM_THRESHOLDS[target]
@@ -526,7 +538,9 @@ def build_report(
                 sections.append({
                     "group": group, "name": f"{label} ({threshold:g})",
                     "rows": selection_rows(selections, probabilities, standard, boosted, stress),
-                    **({"card_scope": target.split("_", 1)[0]} if group == "cards" else {}),
+                    **({"card_scope": target.split("_", 1)[0],
+                        "referee_note": "Team model only · referee model unavailable for this market"}
+                       if group == "cards" else {}),
                     "note": "Model estimates for yellow cards only." if group == "cards" else "",
                 })
         if "cards" in groups:
@@ -560,6 +574,8 @@ def print_report(
 
     for section in report["sections"]:
         print(f"\n[{section['name']}]")
+        if section.get("referee_note"):
+            print(section["referee_note"])
         if section.get("quote_only"):
             print(f"{'Selection':<14} {'Superbet':>9}")
             for row in section["rows"]:
