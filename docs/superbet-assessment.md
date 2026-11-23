@@ -10,14 +10,29 @@ Estimate event probabilities from sporting data, compare them with **Superbet Ro
 | Goals | Match total and first- or second-half total. Full-time and halftime scores are available for 5,329 fixtures. Derive second-half goals from their difference. |
 | Yellow cards | Team or match total. Counts are present for 5,329 fixtures. Premier League has referee names and cards for all 1,900 fixtures. Add the referee's prior match count and yellow-card average when the assignment was known at prediction time. |
 | Corners | Team or match total. Counts are present for 5,329 fixtures. |
-| Player shots | Total shots and shots on target for selected players. The current CSVs have team aggregates. Collect player fixture IDs, shots, minutes, starting appearances, and lineup availability. Define the player shortlist before evaluation, using prior minutes, starting frequency, or a user watchlist. |
+| Player shots | Total shots for selected players. Use player fixture IDs, total shots, minutes, starting appearances, and pre-match lineup availability. Define the player shortlist before evaluation, using prior minutes, starting frequency, or a user watchlist. |
 
-Check player data in parallel with the team markets. [API-Football player stats documentation](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide) describes shots and minutes. [StatsBomb Open Data](https://github.com/hudl/open-data) provides events and lineups for selected competitions. Verify free coverage for the chosen fixtures and verify that the stat definitions match the Superbet markets.
+### Historical player data
+
+The free [xGTables Understat archive](https://www.xgtables.io/understat-data/) supplies fixtures, player appearances with minutes, and shot events. Download the 45 published files for 2021/22–2025/26 and audit their coverage locally.
+
+```bash
+uv run python -m football_odds_predictor.data.player_archive --download
+```
+
+| League | Fixtures | Player appearances | Shot-event rows | Fixtures with no shot map |
+| --- | ---: | ---: | ---: | ---: |
+| Premier League | 1,900 | 56,271 | 49,345 | 0 |
+| Bundesliga | 1,530 | 47,447 | 40,338 | 1 |
+| La Liga | 1,900 | 59,383 | 46,218 | 0 |
+| **Total** | **5,330** | **163,101** | **135,901** | **1** |
+
+The ordinary shot events match the reported appearance shot counts for fixtures with shot maps. The missing map is Holstein Kiel–Bochum on 9 February 2025. Defer shots on target until we can verify goal-line clearances against Superbet's count. For total shots, verify the selection's counting and participation rules before classifying real offers. A historical appearance tells us who played and for how long. For prediction, obtain lineup and player-availability information that was known before kickoff. The current xGTables downloads use a different provider, so verify their fields and comparability separately. [Superbet settlement rules](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-7)
 
 ## Build and validate
 
 1. Build sporting datasets for all listed markets. Use chronological folds, fit preprocessing on training data, and retain a later test window. Start with simple probability and count baselines, then compare candidate models using log loss, Brier score, and calibration by market. For team and player counts, estimate probabilities for the exact offered thresholds. For players, account for likely minutes and the settlement rule if they do not play or start.
-2. Build a read-only Superbet quote collector for a fixture or date. Capture observation time, kickoff, fixture and player IDs, market, period, threshold, selection, decimal odds, and settlement rule. Prefer documented access. [Odds-API.io advertises Superbet coverage](https://odds-api.io/integrations/superbet). Free access, player-market coverage, and exact Romanian prices are unverified. A genuine pre-match quote entered manually can exercise the workflow while automatic access is being verified. Match selections against the [Superbet market definitions](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-5) and [settlement rules](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-7).
+2. Build a read-only Superbet quote collector for a fixture or date using an authorized feed. Capture observation time, kickoff, fixture and player IDs, market, period, threshold, selection, decimal odds, and settlement rule. Superbet's published clause 3.3.4 restricts direct scraping. [Odds-API.io advertises Superbet coverage](https://odds-api.io/integrations/superbet), but free access, player-market coverage, and exact Romanian prices are unverified. A genuine pre-match quote entered manually can exercise the workflow while automatic access is being verified. [Superbet terms](https://superbet.ro/wiki/termeni-si-conditii) · [Superbet market definitions](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-5)
 3. Join predictions with exact matching offers and report fair odds, break-even probability, estimated downside, and signal color. Record the prediction and quote before kickoff. Replay timestamped offers with a simulated budget to measure returns and drawdown by color. Use future fixtures to check whether the color thresholds generalize.
 
 ## Offer report prototype
