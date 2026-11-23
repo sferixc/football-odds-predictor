@@ -17,6 +17,7 @@ input{padding-right:12px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:19
 button{padding:7px 11px;border:0;border-bottom:2px solid transparent;background:transparent;color:#48564e;font-weight:650}
 button[aria-pressed=true]{color:#172f26;border-bottom-color:#294b39}
 #player-filter{max-width:340px;margin-bottom:12px}#status{color:#496258;margin-bottom:12px;min-height:1.5rem}
+.fixture-list{display:flex;flex-wrap:wrap;gap:9px;margin:10px 0 20px}.fixture-button{display:grid;gap:2px;text-align:left;background:#fff;border:1px solid #dce4df;border-radius:8px;padding:10px 13px;color:#202724;min-width:210px}.fixture-button:hover,.fixture-button[aria-pressed=true]{border-color:#397456;background:#f0f7f2}.fixture-button small{color:#62746a}.fixture-button .time{font-weight:700}.empty-day{padding:14px 16px;background:#fff;border:1px solid #dddfd7;border-radius:7px;color:#526158}
 .card{background:#fff;border:1px solid #dddfd7;border-radius:6px;margin-bottom:16px;overflow:hidden}
 .card-title{padding:15px 18px}.card-title p{color:#4b6458;font-size:.9rem;margin-top:3px}
 h2{font-size:1.05rem;letter-spacing:-.01em}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -45,14 +46,15 @@ th,td{padding:10px 14px;border-top:1px solid #e5ebe7}th{background:#f5f8f6;font-
 <header><div class="wrap">Football Odds</div></header>
 <main class="wrap">
   <div class="overview">
-    <div><h1 id="fixture">Saved match offers</h1><p id="metadata"></p></div>
+    <div><h1 id="fixture">Today's matches</h1><p id="metadata"></p></div>
     <div class="controls">
-      <div class="control"><label for="match">Match</label><select id="match"></select></div>
+      <select id="match" hidden aria-hidden="true"></select>
       <div class="control"><label for="stress">Sensitivity scenario</label>
         <select id="stress"><option value="0">No sensitivity adjustment</option><option value="5" selected>−5 percentage points</option><option value="10">−10 percentage points</option></select>
       </div>
     </div>
   </div>
+  <section aria-label="Today's matches"><h2 id="today-title">Today's matches</h2><div id="fixture-list" class="fixture-list"></div></section>
   <nav id="markets" class="toolbar" aria-label="Filter by market"></nav>
   <section id="legend" aria-labelledby="legend-title" hidden>
     <h2 id="legend-title">Value signal · return under stress</h2>
@@ -75,6 +77,7 @@ const match = document.querySelector('#match');
 const stress = document.querySelector('#stress');
 const status = document.querySelector('#status');
 const sections = document.querySelector('#sections');
+const fixtureList = document.querySelector('#fixture-list');
 const player = document.querySelector('#player');
 const marketNames = { '1x2': '1X2', goals: 'Goals', cards: 'Cards', corners: 'Corners', shots: 'Player shots' };
 const signals = new Set(['red', 'yellow', 'orange', 'green', 'purple']);
@@ -223,6 +226,12 @@ async function loadReport() {
     if (id !== requestId) return;
     report = data;
     document.querySelector('#fixture').textContent = report.fixture;
+    if (report.waiting) {
+      document.querySelector('#metadata').textContent = 'Kickoff ' + timestamp(report.kickoff) + (report.competition ? ' · ' + report.competition : '');
+      status.textContent = 'Waiting for the scheduled pre-match odds capture. This page checks automatically.';
+      sections.replaceChildren();
+      return;
+    }
     const parts = ['Kickoff ' + timestamp(report.kickoff), 'Offer ' + timestamp(report.observed)];
     if (report.competition) parts.unshift(report.competition);
     if (report.domestic_history_complete === false) parts.push('Incomplete domestic history');
@@ -238,23 +247,51 @@ async function loadReport() {
 }
 async function refreshMatches() {
   try {
-    const items = await get('/api/matches');
+    const data = await get('/api/matches');
+    const items = data.fixtures;
+    document.querySelector('#today-title').textContent = "Today's matches · " + data.date;
+    fixtureList.replaceChildren();
     if (!items.length) {
-      status.textContent = 'No captures found. Keep the Superbet watcher running through a scheduled match.';
+      fixtureList.append(element('p', data.schedule_error
+        ? 'Could not load today’s schedule. ' + data.schedule_error
+        : 'No upcoming matches found for the competitions currently covered by the dashboard.', 'empty-day'));
+      document.querySelector('#fixture').textContent = "Today's matches";
+      document.querySelector('#metadata').textContent = '';
+      status.textContent = 'The dashboard checks again automatically.';
       return;
     }
     const signature = JSON.stringify(items);
-    if (signature === matchList) return;
-    matchList = signature;
     const previous = match.value;
+    const previousEventId = items.find(item => item.id === previous)?.event_id
+      ?? Number(previous.split('/').at(-1));
     match.replaceChildren();
     for (const item of items) {
-      const option = element('option', item.name + (item.probe ? ' (probe)' : '') + ' · ' + timestamp(item.kickoff));
+      const option = element('option', item.name);
       option.value = item.id;
       match.append(option);
+      const button = element('button', undefined, 'fixture-button');
+      button.type = 'button';
+      button.dataset.id = item.id;
+      button.setAttribute('aria-pressed', String(item.id === (match.value || items[0].id)));
+      button.append(element('span', timestamp(item.kickoff), 'time'));
+      button.append(element('strong', item.name + (item.probe ? ' · probe' : '')));
+      button.append(element('small', [item.league, item.captured ? 'Odds captured' : 'Odds capture pending'].filter(Boolean).join(' · ')));
+      button.addEventListener('click', () => {
+        match.value = item.id;
+        for (const other of fixtureList.querySelectorAll('button')) other.setAttribute('aria-pressed', String(other === button));
+        loadReport();
+      });
+      fixtureList.append(button);
     }
-    if (items.some(item => item.id === previous)) match.value = previous;
-    else await loadReport();
+    const selected = items.find(item => item.id === previous)
+      ?? items.find(item => item.event_id === previousEventId);
+    match.value = (selected ?? items[0]).id;
+    for (const button of fixtureList.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.id === match.value));
+    if (signature !== matchList || !report || report.waiting !== !items.find(item => item.id === match.value)?.captured) {
+      matchList = signature;
+      await loadReport();
+    }
+    if (data.schedule_error) status.textContent = 'Showing saved matches. The live schedule could not refresh: ' + data.schedule_error;
   } catch (error) {
     status.textContent = error.message;
   }

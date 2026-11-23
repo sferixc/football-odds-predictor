@@ -8,15 +8,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import pickle
+from datetime import UTC, datetime, timedelta
+from time import monotonic
 from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
 
 from ..data.referees import APPOINTMENTS
+from ..data.superbet_watch import discover
+from ..data.superbet_snapshot import utc_timestamp
 from ..models.cards import load_card_models
 from ..models.ucl import load_ucl_models
 from ..training.fit_sporting import DEFAULT_MODELS
 from .superbet_report import RAW, build_report, read_snapshot
 
 PAGE = Path(__file__).with_name("dashboard.html")
+DASHBOARD_ZONE = ZoneInfo("Europe/Amsterdam")
 
 
 def snapshots() -> dict:
@@ -40,6 +46,47 @@ def snapshots() -> dict:
 
 
 def handler_for(models: dict) -> type[BaseHTTPRequestHandler]:
+    schedule_cache: dict = {"at": 0.0, "fixtures": [], "error": None}
+
+    def today_fixtures() -> tuple[list[dict], str | None, str]:
+        """Combine today's public schedule with saved offers; refresh schedule every 2 minutes."""
+        now = datetime.now(UTC)
+        today = now.astimezone(DASHBOARD_ZONE).date()
+        if monotonic() - schedule_cache["at"] >= 120:
+            try:
+                schedule_cache["fixtures"] = discover(now)
+                schedule_cache["error"] = None
+            except (KeyError, OSError, ValueError) as error:
+                schedule_cache["error"] = str(error)
+            schedule_cache["at"] = monotonic()
+
+        merged = {}
+        for fixture in schedule_cache["fixtures"]:
+            if fixture.kickoff.astimezone(DASHBOARD_ZONE).date() != today:
+                continue
+            merged[fixture.event_id] = {
+                "id": f"scheduled/{fixture.event_id}", "event_id": fixture.event_id,
+                "name": fixture.name.replace("·", " – "), "league": fixture.league,
+                "kickoff": fixture.kickoff.isoformat(), "captured": False, "probe": False,
+            }
+
+        captures = snapshots()
+        for item in captures.values():
+            try:
+                kickoff = utc_timestamp(item["kickoff"])
+                if kickoff.astimezone(DASHBOARD_ZONE).date() != today:
+                    continue
+                event_id = int(item["path"].stem)
+                merged[event_id] = {
+                    "id": item["id"], "event_id": event_id, "name": item["name"],
+                    "league": "", "kickoff": item["kickoff"], "captured": True,
+                    "probe": item["probe"],
+                }
+            except (ValueError, OSError):
+                continue
+        fixtures = sorted(merged.values(), key=lambda item: item["kickoff"])
+        return fixtures, schedule_cache["error"], today.isoformat()
+
     @lru_cache(maxsize=16)
     def report(path: Path, modified: int, appointments_modified: int, probe: bool, stress: Decimal | None) -> dict:
         # Modification times invalidate the cache when local offers or referee appointments change.
@@ -66,12 +113,24 @@ def handler_for(models: dict) -> type[BaseHTTPRequestHandler]:
             if request.path not in ("/api/matches", "/api/report"):
                 self.send_json({"error": "Not found."}, 404)
                 return
-            items = snapshots()
             if request.path == "/api/matches":
-                self.send_json([{k: v for k, v in item.items() if k != "path"} for item in items.values()])
+                fixtures, error, today = today_fixtures()
+                self.send_json({"date": today, "fixtures": fixtures, "schedule_error": error})
                 return
             parameters = parse_qs(request.query)
-            item = items.get(parameters.get("match", [""])[0])
+            match_id = parameters.get("match", [""])[0]
+            if match_id.startswith("scheduled/"):
+                event_id = match_id.split("/", maxsplit=1)[1]
+                fixture = next((f for f in today_fixtures()[0] if str(f["event_id"]) == event_id), None)
+                if fixture is None:
+                    self.send_json({"error": "Today's fixture is no longer on the schedule."}, 404)
+                else:
+                    self.send_json({
+                        "waiting": True, "fixture": fixture["name"], "kickoff": fixture["kickoff"],
+                        "competition": fixture["league"],
+                    })
+                return
+            item = snapshots().get(match_id)
             if item is None:
                 self.send_json({"error": "Capture not found."}, 404)
                 return
