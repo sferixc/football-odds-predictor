@@ -1,4 +1,8 @@
-"""Build chronological sporting inputs and observed outcomes for the new models."""
+"""Build the inputs and labels for independent event probabilities.
+
+Each dataset returns a table and an explicit list of model inputs. The table
+also carries identifiers and observed outcomes for training and evaluation.
+"""
 
 from collections.abc import Sequence
 from pathlib import Path
@@ -25,6 +29,7 @@ def _recent_means(
     if rows.duplicated([*groups, "match_date"]).any():
         raise ValueError("Expected at most one observation per team or player and date")
     rows = rows.sort_values("match_date")
+    # Shift by one fixture before rolling so the current result stays out of its inputs.
     return rows.groupby(groups)[list(values)].transform(
         lambda series: series.shift().rolling(HISTORY_LENGTH).mean()
     )
@@ -64,11 +69,13 @@ def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list
     means = _recent_means(histories, ["league", "team"], stats)
     for side in SIDES:
         recent = histories["side"].eq(side)
+        # Restore the original fixture row order after computing means in date order.
         side_means = means.loc[histories.index[recent]].reset_index(drop=True)
         matches = matches.join(side_means.add_prefix(f"{side}_mean_"))
 
     key = list(FIXTURE_COLUMNS)
     elo_columns = ["home_elo", "away_elo"]
+    # Reuse the pre-match ratings from the earlier experiment.
     elo = pd.read_csv(features_path, usecols=[*key, *elo_columns], parse_dates=["source_kickoff"])
     dataset = matches.merge(elo, on=key, validate="one_to_one")
     if len(dataset) != len(matches) or len(dataset) != len(elo):
@@ -78,7 +85,7 @@ def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list
 
 
 def player_dataset(root: Path) -> tuple[pd.DataFrame, list[str]]:
-    """Build shot inputs from prior appearances with positive recorded minutes."""
+    """Build player histories and labels for probabilities conditional on playing."""
     seasons = []
     for competition in COMPETITIONS:
         for season in SEASONS:
@@ -97,6 +104,7 @@ def player_dataset(root: Path) -> tuple[pd.DataFrame, list[str]]:
     data["match_date"] = pd.to_datetime(data["date"], format="%Y-%m-%d")
     data["source_kickoff"] = data["match_date"]
     data["at_home"] = data["side"].eq("h").astype(int)
+    # Current minutes establish which appearances are evaluated. Only prior means are inputs.
     history = _recent_means(data, ["league", "player_id"], ["minutes", "shots"]).add_prefix("mean_")
     data = data.join(history)
     # The shortlist is defined with prior minutes, before seeing the current outcome.

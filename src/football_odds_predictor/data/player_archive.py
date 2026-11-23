@@ -63,6 +63,7 @@ def audit_archive(root: Path) -> None:
             reported = appearances.set_index(key)["shots"]
             if not shot_counts.index.isin(reported.index).all():
                 raise ValueError(f"Shot without a matching player appearance in {folder}")
+            # An absent fixture shot map differs from zero shots by one player.
             mapped = appearances["fixture_id"].isin(shots["fixture_id"]).to_numpy()
             recorded = shot_counts.reindex(reported.index, fill_value=0)
             counts["fixtures"] += len(fixtures)

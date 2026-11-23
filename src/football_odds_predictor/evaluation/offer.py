@@ -7,6 +7,7 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class OfferAssessment:
+    """Separate the estimated value of the price from the risk of losing the stake."""
     fair_odds: Decimal
     break_even_probability: Decimal
     loss_probability: Decimal
@@ -41,6 +42,7 @@ def assess_offer(
     # A void refunds the stake. The conservative case holds void probability
     # fixed and assigns the reduction in win probability to losses.
     settled_probability = 1 - void_probability
+    # Return is per unit staked. Multiply by the stake to get expected profit.
     expected_return = win_probability * odds - settled_probability
     conservative_return = conservative_win_probability * odds - settled_probability
     if expected_return <= 0:
@@ -55,6 +57,7 @@ def assess_offer(
         signal = "purple"
 
     return OfferAssessment(
+        # Break-even solves p(win) × odds = p(win or loss).
         fair_odds=settled_probability / win_probability,
         break_even_probability=settled_probability / odds,
         loss_probability=settled_probability - win_probability,

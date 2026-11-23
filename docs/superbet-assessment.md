@@ -35,6 +35,14 @@ The ordinary shot events match the reported appearance shot counts for fixtures 
 2. Capture one pre-match snapshot per selected fixture. Target 15 minutes before kickoff and accept captures 10–20 minutes before kickoff. Record the actual observation time, scheduled kickoff, fixture and player IDs, market, period, threshold, selection, decimal odds, and settlement rule. Report missing markets for that snapshot. Check a candidate feed on one real fixture before integrating it. Superbet's published clause 3.3.4 restricts direct scraping. [Odds-API.io advertises Superbet coverage](https://odds-api.io/integrations/superbet), but free access, player-market coverage, and exact Romanian prices are unverified. A genuine pre-match quote entered manually can exercise the workflow while automatic access is being verified. [Superbet terms](https://superbet.ro/wiki/termeni-si-conditii) · [Superbet market definitions](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-5)
 3. Join predictions with exact matching offers and report fair odds, break-even probability, estimated downside, and signal color. Record the prediction and quote before kickoff. Replay timestamped offers with a simulated budget to measure returns and drawdown by color. Use future fixtures to check whether the color thresholds generalize.
 
+### Optional future experiment
+
+The following describes a possible virtual-budget simulation. Its design is open.
+
+Record each simulated selection before kickoff with its fixture, market, threshold, captured price, model probability, model version, signal color, and simulated stake. Track user selections and any preset selection rule so each can be evaluated on its own. Score each selection using the applicable settlement rule, including full refunds when an offer is void.
+
+Start with a virtual budget and a fixed one-unit stake. Report the number of settled selections, total staked, net result, return on stake, and maximum drawdown overall and by color. Group selections from the same match when measuring uncertainty. Select any color thresholds on earlier captures and evaluate them on later ones with the rules frozen.
+
 ### Superbet snapshot pilot
 
 A single unauthenticated GET to the Romanian site's public offer service returned 443 markets for Arsenal–Borussia Dortmund, event 14790413, kickoff 24 November 2026 at 20:00 UTC. The response included 1X2, totals for goals in the match and in each half, match and team corners, and 217 selections in the total player shots market. For example, the player-shot records include player ID, name, threshold, and price. Card markets were labeled total cards. Verify their settlement rules before mapping them to yellow-card targets. [Superbet public football offer](https://superbet.ro/pariuri-sportive/fotbal)
@@ -45,7 +53,7 @@ Start the collector once. It discovers Premier League, Bundesliga, and La Liga f
 uv run python -m football_odds_predictor.data.superbet_watch
 ```
 
-The network probe was outside the target window. The capture-window checks were verified locally with the real response, and an actual timed capture remains to be verified. OddsPapi separately documents historical snapshots for `superbet.ro`. Verify access under the available account and match the historical observation time to the same pre-match window before using them for a replay. [OddsPapi historical example](https://oddspapi.io/blog/superbet-api-odds-access/#step-4-check-the-closing-line-on-played-fixtures)
+The network probes were outside the target window. The capture-window checks were verified locally with a real response, and an actual timed capture remains to be verified. OddsPapi separately documents historical snapshots for `superbet.ro`. Verify access under the available account and match the historical observation time to the same pre-match window before using them for a replay. [OddsPapi historical example](https://oddspapi.io/blog/superbet-api-odds-access/#step-4-check-the-closing-line-on-played-fixtures)
 
 ### SuperCote and boosted combinations
 

@@ -1,4 +1,8 @@
-"""Compare sporting probability models on expanding chronological folds."""
+"""Compare sporting probability models on expanding chronological folds.
+
+The historical frequency is the reference score. Each candidate predicts
+probabilities for the same validation fixtures for a given selection.
+"""
 
 from pathlib import Path
 from statistics import mean
@@ -37,6 +41,7 @@ TEAM_THRESHOLDS = {
 def add_team_outcomes(rows: pd.DataFrame) -> None:
     """Derive labels from the match itself, for evaluation and model fitting."""
     difference = rows["home_goals"] - rows["away_goals"]
+    # The 1X2 class order is home win, draw, away win.
     rows["1x2"] = np.select([difference.gt(0), difference.eq(0)], [0, 1], default=2)
     rows.loc[difference.isna(), "1x2"] = np.nan
     for scope, stat in (
@@ -52,6 +57,7 @@ def epoch_predictions(
 ) -> tuple[np.ndarray, int]:
     """Choose an epoch on the last fifth of training dates, then refit on the fold."""
     sorted_days = dates.drop_duplicates().sort_values()
+    # Pick one date boundary so that fixtures on the same day stay together.
     inner_validation = dates.ge(sorted_days.iloc[int(len(sorted_days) * 0.8)]).to_numpy()
     scaler = StandardScaler().fit(x[~inner_validation])
     fit_x = scaler.transform(x[~inner_validation])
@@ -62,6 +68,7 @@ def epoch_predictions(
     best_loss = np.inf
     best_epoch = 1
     for epoch in range(1, MAX_EPOCHS + 1):
+        # Shuffle the earlier rows within each epoch. Later dates score the epoch.
         order = rng.permutation(len(fit_y))
         model.partial_fit(fit_x[order], fit_y[order], classes=classes)
         loss = log_loss(validation_y, model.predict_proba(validation_x), labels=classes)
@@ -70,6 +77,7 @@ def epoch_predictions(
         if epoch - best_epoch >= PATIENCE:
             break
 
+    # Refit from scratch on the entire training fold for the selected number of epochs.
     scaler = StandardScaler().fit(x)
     fit_x = scaler.transform(x)
     model = SGDClassifier(**SGD_SETTINGS)
@@ -94,6 +102,7 @@ def evaluate_market(
         validation_x = validation[inputs].to_numpy()
         train_target, actual = train[target].to_numpy(), validation[target].to_numpy()
         if threshold is not None:
+            # A line of 1.5 shots becomes a yes/no label for two or more shots.
             train_target, actual = train_target > threshold, actual > threshold
         y, actual = train_target.astype(int), actual.astype(int)
         if not np.array_equal(np.unique(y), classes):

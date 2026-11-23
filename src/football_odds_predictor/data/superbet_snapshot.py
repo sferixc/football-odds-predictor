@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 ENDPOINT = "https://production-superbet-offer-ro.freetls.fastly.net/v3/ro-RO/events"
+# Source market IDs mapped to the event names used in the sporting analysis.
 SIMPLE_MARKETS = {
     "547": "1x2",
     "200734": "match_goals",
@@ -35,6 +36,7 @@ def open_price(odd: dict) -> bool:
 
 def simple_promotions(event: dict) -> list[dict]:
     """Extract open single selections that map to a supported sporting market."""
+    # Match the promotional and standard 1X2 markets by outcome (1, X, or 2).
     standard = {}
     for market in event["markets"]:
         if market["id"] == 547:
@@ -94,6 +96,7 @@ def utc_timestamp(value: str) -> datetime:
 
 
 def check_window(kickoff: datetime, observed_at: datetime) -> None:
+    """Require an observed price 10 to 20 minutes before scheduled kickoff."""
     if not timedelta(minutes=10) <= kickoff - observed_at <= timedelta(minutes=20):
         raise ValueError("Capture must take place 10–20 minutes before kickoff")
 
@@ -120,6 +123,7 @@ def capture(event_id: int, kickoff: datetime, output_dir: Path) -> Path:
     url = f"{ENDPOINT}?{urlencode({'events': event_id})}"
     with urlopen(url, timeout=15) as response:
         payload = json.load(response)
+    # Record completion time and recheck the window in case the request ran long.
     observed_at = datetime.now(UTC)
     check_window(kickoff, observed_at)
     event = read_event(payload, event_id, kickoff)
@@ -127,6 +131,7 @@ def capture(event_id: int, kickoff: datetime, output_dir: Path) -> Path:
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as handle:
+        # Keep the original event so future parsers can re-read markets we skip today.
         json.dump(
             {
                 "observed_at_utc": observed_at.isoformat(),

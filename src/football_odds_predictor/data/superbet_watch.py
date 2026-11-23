@@ -47,6 +47,7 @@ def scheduled_fixtures(payload: dict, now: datetime) -> list[Fixture]:
 
 
 def discover(now: datetime) -> list[Fixture]:
+    """Read the next week of fixture dates from the prematch listing."""
     start = now.replace(minute=0, second=0, microsecond=0)
     end = start + timedelta(days=7)
     parameters = {
@@ -76,6 +77,7 @@ def next_capture(
 
 
 def watch(output_dir: Path) -> None:
+    """Refresh the schedule, then wait for either a capture or the next refresh."""
     fixtures = []
     attempted: set[tuple[int, datetime]] = set()
     refresh_at = datetime.now(UTC)
@@ -87,6 +89,7 @@ def watch(output_dir: Path) -> None:
             except (KeyError, OSError, ValueError) as error:
                 print(f"Schedule refresh failed: {error}", file=sys.stderr, flush=True)
             else:
+                # A kickoff change makes a new scheduled attempt possible for that fixture.
                 attempted.intersection_update((f.event_id, f.kickoff) for f in fixtures)
                 print(f"{now.isoformat()} | {len(fixtures)} upcoming fixtures", flush=True)
             refresh_at = now + REFRESH_INTERVAL
@@ -94,6 +97,7 @@ def watch(output_dir: Path) -> None:
         now = datetime.now(UTC)
         fixture = next_capture(fixtures, now, output_dir, attempted)
         if fixture is not None and fixture.capture_time <= now:
+            # Record the attempt before fetching to avoid repeating a failed request in the loop.
             attempted.add((fixture.event_id, fixture.kickoff))
             try:
                 capture(fixture.event_id, fixture.kickoff, output_dir)
