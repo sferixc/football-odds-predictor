@@ -3,9 +3,11 @@
 import argparse
 from decimal import Decimal, InvalidOperation
 import json
+import os
 from pathlib import Path
 import pickle
 import re
+import sys
 import unicodedata
 from zoneinfo import ZoneInfo
 
@@ -47,6 +49,17 @@ TEAM_MARKETS = {
     ),
 }
 GROUPS = ("1x2", "goals", "cards", "corners", "shots")
+BADGE_STYLE = {
+    "red": "97;41", "yellow": "30;103", "orange": "30;48;5;208",
+    "green": "30;102", "purple": "97;45",
+}
+
+
+def color_badge(signal: str, highlighted: bool) -> str:
+    """Pad the label before applying ANSI codes so the table stays aligned."""
+    if not highlighted or signal not in BADGE_STYLE:
+        return f"{signal:>8}"
+    return f"\033[{BADGE_STYLE[signal]}m{signal.upper().center(8)}\033[0m"
 
 
 def read_snapshot(path: Path, probe: bool) -> tuple[dict, str]:
@@ -205,7 +218,7 @@ def player_report(event: dict, player_filter: str | None, promotions: list[dict]
 
 def print_selections(
     label: str, selections: tuple[str, ...], probabilities: np.ndarray,
-    prices: dict, promotions: dict, stress: Decimal | None,
+    prices: dict, promotions: dict, stress: Decimal | None, highlighted: bool = False,
 ) -> None:
     print(f"\n[{label}]")
     print(f"{'Selection':<10} {'Win':>7} {'Loss':>7} {'Fair':>7} {'Superbet':>9} {'Promo':>8} "
@@ -229,12 +242,12 @@ def print_selections(
         fair = f"{1 / p:.2f}" if p > 0 else "—"
         print(f"{selection:<10} {p:>7.1%} {1 - p:>7.1%} {fair:>7} "
               f"{standard_text:>9} {promoted_text:>8} "
-              f"{returns:>12} {conservative:>9} {signal:>8}")
+              f"{returns:>12} {conservative:>9} {color_badge(signal, highlighted)}")
 
 
 def print_report(
     event: dict, observed: str, stress: Decimal | None, models: dict,
-    groups: tuple[str, ...] = GROUPS, player_filter: str | None = None,
+    groups: tuple[str, ...] = GROUPS, player_filter: str | None = None, highlighted: bool = False,
 ) -> None:
     fixture = event["fixture"]
     if int(fixture["tournament_id"]) not in LEAGUES:
@@ -266,7 +279,7 @@ def print_report(
                     boosted[selection] = max(boosted.get(selection, 0), offer["odds"])
             print_selections(
                 "Full-time result", ("1", "X", "2"),
-                predict_saved(models, current, "1x2", cutoff)[0], prices, boosted, stress,
+                predict_saved(models, current, "1x2", cutoff)[0], prices, boosted, stress, highlighted,
             )
 
         for group in groups:
@@ -276,7 +289,7 @@ def print_report(
                 probabilities = predict_saved(models, current, target, cutoff, threshold)[0]
                 print_selections(
                     f"{label} ({threshold:g})", ("Sub", "Peste"), probabilities,
-                    standard, boosted, stress,
+                    standard, boosted, stress, highlighted,
                 )
             if group == "cards":
                 print("Yellow-card probabilities only. Superbet total cards has a separate settlement definition.")
@@ -292,6 +305,8 @@ def main() -> None:
     parser.add_argument("--stress-pp", type=Decimal, help="Optional probability reduction in percentage points")
     parser.add_argument("--market", action="append", choices=GROUPS, help="Show only this market group")
     parser.add_argument("--player", help="Filter player shot selections by partial name")
+    parser.add_argument("--color", choices=("auto", "always", "never"), default="auto",
+                        help="Highlight signal labels with terminal background colors")
     args = parser.parse_args()
     stress = args.stress_pp
     if stress is not None and (not stress.is_finite() or not 0 < stress < 100):
@@ -312,7 +327,14 @@ def main() -> None:
             raise ValueError("Model file missing. First run football_odds_predictor.training.fit_sporting.")
         with args.models.open("rb") as handle:
             models = pickle.load(handle)
-        print_report(event, observed, stress / 100 if stress is not None else None, models, groups, args.player)
+        highlighted = args.color == "always" or (
+            args.color == "auto" and sys.stdout.isatty() and "NO_COLOR" not in os.environ
+            and os.environ.get("TERM") != "dumb"
+        )
+        print_report(
+            event, observed, stress / 100 if stress is not None else None, models,
+            groups, args.player, highlighted,
+        )
     except (InvalidOperation, KeyError, OSError, ValueError, pickle.UnpicklingError, EOFError) as error:
         parser.error(str(error))
 

@@ -102,6 +102,7 @@ Peste        59.8%   40.2%    1.67      1.85        —        +10.6%     +1.4% 
 - **Win / Loss** show the model's probabilities for the selection.
 - **Fair** is the estimated break-even decimal price. **Superbet / Promo** show the standard and matching promotional prices.
 - **Est. return** uses the higher displayed price. **Prudent / Color** appear when you pass a sensitivity setting such as `--stress-pp 5`, which reduces the win probability by five percentage points. The colors are provisional.
+- Signal labels have colored backgrounds in interactive terminals. Use `--color always` to force highlighting or `--color never` for plain text.
 - The yellow-card section shows model estimates pending settlement mapping. Player shot probabilities are conditional on playing. Check the latest team and player result dates printed by the report.
 
 If you see **No saved captures yet**, leave the watcher running through an eligible fixture. If you see **Model file missing**, run the one-time fit in step 3. If a team cannot be matched or has incomplete history, check the results files and their team names.
