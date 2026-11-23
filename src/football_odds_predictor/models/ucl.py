@@ -25,7 +25,11 @@ def load_ucl_models(models: dict) -> None:
             models["ucl"] = pickle.load(handle)
 
 
-def predict_ucl(bundle, fixture, kickoff, competition="CL"):
+def referee_key(name):
+    return club_key(name) if isinstance(name, str) and name.strip() else None
+
+
+def predict_ucl(bundle, fixture, kickoff, competition="CL", referee=None):
     """Read each club's shared rating and form strictly before kickoff day."""
     season = kickoff.year - (kickoff.month < 7)
     if (bundle is None or "competitions" not in bundle or season <= bundle["training_end"]
@@ -49,9 +53,20 @@ def predict_ucl(bundle, fixture, kickoff, competition="CL"):
         last_dates.append(str(day))
     x = [pre_match_inputs(home, away, ratings, history)]
     models = bundle["competitions"][competition]
+    card_forecasts = {}
+    referee_history = bundle.get("referee_cards", {}).get(referee_key(referee), ())
+    ref_index = bisect_left(referee_history, kickoff.date(), key=lambda row: row[0])
+    prior = referee_history[ref_index - 1] if ref_index else None
+    for scope, variants in models.get("cards", {}).items():
+        use_referee = bool(variants["use_referee"] and prior and prior[2] >= 3)
+        if use_referee:
+            expected = variants["referee"].predict([[*x[0], prior[1] / prior[2]]])[0]
+        else:
+            expected = variants["team"].predict(x)[0]
+        card_forecasts[scope] = (float(expected), use_referee)
     return (
         models["result"].predict_proba(x)[0], float(models["goals"].predict(x)[0]),
-        last_dates, all(team in bundle["domestic"] for team in (home, away)),
+        last_dates, all(team in bundle["domestic"] for team in (home, away)), card_forecasts,
     )
 
 

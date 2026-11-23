@@ -107,11 +107,14 @@ mkdir -p data/raw/open-matchday data/raw/openfootball
 curl -fL https://codeload.github.com/oladeeayo/open-matchday/zip/refs/heads/master -o data/raw/open-matchday/results-2627.zip
 curl -fL https://openfootball.github.io/europe/slovakia_2023-24_sk1.json -o data/raw/openfootball/slovakia_2023-24_sk1.json
 curl -fL https://openfootball.github.io/europe/slovakia_2024-25_sk1.json -o data/raw/openfootball/slovakia_2024-25_sk1.json
+curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/game_events.csv.gz -o data/raw/transfermarkt/game_events.csv.gz
+curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/game_lineups.csv.gz -o data/raw/transfermarkt/game_lineups.csv.gz
 uv run python -m football_odds_predictor.training.fit_ucl
 ```
 
-Restart the dashboard and watcher. The European model covers 1X2 and
-full-match goals in the two competitions. See the
+Restart the dashboard and watcher. The European models cover 1X2, full-match goals and the home, away and match
+card totals in both competitions. European card forecasts require the two
+Transfermarkt event and lineup files. See the
 [European model plan](docs/european-model-plan.md) for coverage and evaluation.
 
 ## 5. Browse match reports

@@ -163,7 +163,7 @@ function render() {
     if (section.group === 'cards') {
       if (section.note) title.append(element('p', section.note));
     }
-    if (section.quote_only || (section.group === 'cards' && report.competition)) {
+    if (section.quote_only || (section.group === 'cards' && report.competition && !report.european_card_model)) {
       title.append(element('p', 'Superbet prices only. Model data unavailable for this market.'));
     }
     card.append(title);

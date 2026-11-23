@@ -21,6 +21,9 @@ SIMPLE_MARKETS = {
     "704": "match_corners",
     "713": "home_corners",
     "733": "away_corners",
+    "690": "match_card_points",
+    "700": "home_card_points",
+    "708": "away_card_points",
     "236218": "player_total_shots",
 }
 

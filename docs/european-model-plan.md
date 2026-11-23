@@ -14,10 +14,11 @@
 - Audit fixture and referee coverage each time the artifact is rebuilt. The current snapshot has domestic results for 114 of 127 identified clubs since 2024/25, across 26 domestic leagues. For each European competition, the 377 historical fixtures have referee names. The 72 current-season fixtures in the result export lack referee assignments.
 - Next evaluate which inputs help using expanding validation folds. Compare shared Elo alone with shared Elo plus recent form and opponent strength. Stratify by tournament, domestic coverage, and the age of each team's latest result. Keep subsequent seasons for a fresh final comparison.
 
-## European markets beyond 1X2 and full-game goals
+## European cards and remaining markets
 
-- Obtain dated, match-level UEFA corner counts, first-half results and card events for multiple seasons before fitting those models. The current Open Matchday European files contain scores with empty corner and card columns.
-- Join referees through club IDs, match date and competition. Use only appointments known at offer time and only referee events from earlier days. Evaluate models with and without referee history on identical fixtures. Track direct reds, second yellows, recipient on-field status and time for compatibility with card settlement.
+- Obtain dated, match-level UEFA corner counts and first-half results for multiple seasons before fitting those models. The current Open Matchday European files lack those fields.
+- Match Transfermarkt card events and lineups by game ID. Reconstruct active players from starters and substitutions. Count an eligible yellow as one and a dismissal as two, including a dismissal that follows a second yellow. Exclude matches with incomplete or ambiguous lineup or card records. The feed records 90th-minute events at minute 90, so it cannot consistently distinguish stoppage time from the final whistle. These are reconstructed labels and have not been reconciled with actual bookmaker settlements. [Superbet settlement rules](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-7)
+- Fit separate Poisson models for home, away and match card totals in each competition. Compare the team-only and referee variants on identical fixtures using the mean Brier score over lines 0.5–9.5. Use an appointment known by snapshot time and require at least three prior reconstructed matches for the referee. Use the team model when the referee variant fails validation or history is missing. Use odds from the matching open card market, with a matching promotion when available.
 - Build separate player total-shot targets from appearances and timestamps before scoring that market. Check settlement for participation and separate quote-only markets from model output using the same dashboard table.
 - The original domestic dashboard uses its existing trained models. Migrate domestic models to the shared features only after retraining and checking chronological metrics for those markets.
 
@@ -39,3 +40,18 @@ The two Slovak inputs are the 2023/24 and 2024/25 archives linked in the
 contributor guide. [Transfermarkt](https://github.com/dcaribou/transfermarkt-datasets) ·
 [Open Matchday](https://github.com/oladeeayo/open-matchday) ·
 [OpenFootball](https://openfootball.github.io/europe/)
+
+The card run reconstructed 1,110 of 1,152 historical fixtures. In 2024/25
+validation, mean Brier for match totals moved from 0.1305 to 0.1302 in UCL and
+from 0.1466 to 0.1385 in Europa League when adding referee history. The paired
+sample sizes were 140 and 101, respectively. In the held-out 2025/26 season, the
+selected models with team-only fallbacks scored 0.1237 across 141 UCL fixtures
+and 0.1223 across 139 Europa League fixtures for match totals. Lower is better.
+
+The archive files used were `game_events.csv.gz` with SHA-256
+`80eb3b2a85c780b2caaf1e8850c3d16de7f8b1240b53aaf415bdc56b641d7d68`
+and `game_lineups.csv.gz` with SHA-256
+`5e83d6fad28364aadfea608013700cf09990062eede1ad9ef189189b0af47ba2`.
+The saved Arsenal–Dortmund probe had open total-card quotes. The Celta
+Vigo–Bournemouth probe had none, so the report shows model odds for that match
+and leaves the signal blank.

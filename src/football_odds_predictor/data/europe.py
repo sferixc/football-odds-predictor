@@ -47,6 +47,7 @@ ALIASES = {
     "H. Beer-Sheva": "Hapoel Be'er Sheva", "Lillestrøm": "Lillestrom",
     "Marseille": "Olympique Marseille", "N.E.C.": "NEC Nijmegen",
     "Rennes": "Stade Rennais", "Union SG": "Union Saint-Gilloise",
+    "Union St.-Gilloise": "Union Saint-Gilloise", "USG": "Union Saint-Gilloise",
 }
 
 
@@ -66,7 +67,7 @@ def pre_match_inputs(home, away, ratings, history):
 
 
 def read_europe_games(club_key):
-    columns = ["competition_id", "competition_type", "season", "round", "date",
+    columns = ["game_id", "competition_id", "competition_type", "season", "round", "date",
                "home_club_id", "away_club_id", "home_club_goals", "away_club_goals",
                "home_club_name", "away_club_name", "referee"]
     games = pd.read_csv(ARCHIVE, usecols=columns, parse_dates=["date"])
@@ -200,7 +201,8 @@ def build_europe_history(games: pd.DataFrame, mixed: bool = True):
             margin = row.home_club_goals - row.away_club_goals
             if row.competition_id in EUROPE and str(row.round).startswith("Group") and row.season >= 2021:
                 result = 0 if margin > 0 else (1 if margin == 0 else 2)
-                observations.append((row.competition_id, row.season, result,
+                observations.append((getattr(row, "game_id", None), date, getattr(row, "referee", None),
+                                     row.competition_id, row.season, result,
                                      row.home_club_goals + row.away_club_goals,
                                      *pre_match_inputs(home, away, ratings, history)))
             home_elo, away_elo = ratings.get(home, 1500), ratings.get(away, 1500)
@@ -218,5 +220,5 @@ def build_europe_history(games: pd.DataFrame, mixed: bool = True):
         for team, change in changes.items():
             ratings[team] = ratings.get(team, 1500) + change
             timeline[team].append((date.date(), ratings[team], tuple(history[team])))
-    rows = pd.DataFrame(observations, columns=["competition", "season", "result", "goals", *INPUTS])
+    rows = pd.DataFrame(observations, columns=["game_id", "date", "referee", "competition", "season", "result", "goals", *INPUTS])
     return rows, dict(timeline)

@@ -14,6 +14,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..data.europe import EUROPE, INPUTS, build_europe_history, read_europe_games
 from ..models.ucl import UCL_MODELS, club_key
+from .europe_cards import fit_europe_cards
 
 COVERAGE = Path("data/processed/europe-coverage.csv")
 
@@ -54,6 +55,10 @@ def main() -> None:
         rows.loc[rows.competition.eq(competition)], baseline.loc[baseline.competition.eq(competition)], competition,
     ) for competition in sorted(EUROPE)}
 
+    card_models, referee_cards = fit_europe_cards(games, rows)
+    for competition, cards in card_models.items():
+        models[competition]["cards"] = cards
+
     latest = games.loc[games.season.ge(2024)]
     european = latest.loc[latest.competition_id.isin(EUROPE)]
     domestic = latest.loc[latest.competition_type.eq("domestic_league")]
@@ -75,7 +80,7 @@ def main() -> None:
     for competition, group in european.groupby("competition_id"):
         known = group.referee.fillna("").str.strip().ne("").sum()
         print(f"{competition} historical referee coverage: {known}/{len(group)}")
-    bundle = {"names": names, "timeline": timeline, "competitions": models,
+    bundle = {"names": names, "referee_cards": referee_cards, "timeline": timeline, "competitions": models,
               "domestic": set(leagues.club_id), "training_end": rows.loc[rows.season.le(2024), "season"].max()}
     with NamedTemporaryFile(dir=UCL_MODELS.parent, delete=False) as temporary:
         path = Path(temporary.name)

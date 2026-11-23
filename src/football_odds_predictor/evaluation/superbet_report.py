@@ -332,9 +332,12 @@ def build_report(
         competition = EUROPEAN_TOURNAMENTS[tournament]
         report["competition"] = "Champions League" if competition == "CL" else "Europa League"
         report["sections"] = european_offer_sections(event, groups, player_filter)
-        forecast = predict_ucl(models.get("ucl"), fixture, utc_timestamp(fixture["utc_date"]), competition)
+        referee = pre_match_referee(event, utc_timestamp(observed)) if observed != "untimed probe" else fixture.get("referee")
+        forecast = predict_ucl(
+            models.get("ucl"), fixture, utc_timestamp(fixture["utc_date"]), competition, referee,
+        )
         if forecast is not None:
-            result, expected_goals, last_dates, has_domestic_history = forecast
+            result, expected_goals, last_dates, has_domestic_history, card_forecasts = forecast
             promotions = simple_promotions(event)
             for section in report["sections"]:
                 market = section.get("market_id")
@@ -362,6 +365,34 @@ def build_report(
                     if not rows:
                         continue
                 section.update(rows=rows, quote_only=False)
+            if "cards" in groups:
+                for market, scope in CARD_OFFER_MARKETS.items():
+                    if scope not in card_forecasts:
+                        continue
+                    expected, uses_referee = card_forecasts[scope]
+                    rows = []
+                    quotes = next((section["rows"] for section in report["sections"]
+                                   if section.get("card_scope") == scope), ())
+                    lines = set(CARD_LINES)
+                    lines.update(float(match[1]) for quote in quotes
+                                 if (match := re.fullmatch(r"(?:Over|Under) (\d+\.5)", quote["selection"])))
+                    for line in sorted(lines):
+                        standard, boosted = team_prices(event, market, f"{scope}_card_points", line, promotions)
+                        selections = ("Sub", "Peste")
+                        scored = selection_rows(
+                            selections, goal_probabilities(line, expected), standard, boosted, stress,
+                        )
+                        for row in scored:
+                            row["selection"] += f" {line:g}"
+                        rows.extend(scored)
+                    report["sections"].append({
+                        "group": "cards", "card_scope": scope, "name": f"{scope.title()} total cards",
+                        "rows": rows, "quote_only": False,
+                        "note": "Card totals reconstructed from events and lineups. " + (
+                            "Uses the referee's prior matches." if uses_referee else "Uses team inputs."
+                        ),
+                    })
+                report["european_card_model"] = bool(card_forecasts)
             report["last_results"] = last_dates
             report["domestic_history_complete"] = has_domestic_history
         report["offer_only"] = all(section["quote_only"] for section in report["sections"])
