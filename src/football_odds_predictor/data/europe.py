@@ -66,14 +66,18 @@ def pre_match_inputs(home, away, ratings, history):
             *(value for pair in zip(*fields) for value in pair)]
 
 
-def read_europe_games(club_key):
+def read_europe_games(club_key, include_domestic_cups=False):
     columns = ["game_id", "competition_id", "competition_type", "season", "round", "date",
                "home_club_id", "away_club_id", "home_club_goals", "away_club_goals",
                "home_club_name", "away_club_name", "referee"]
     games = pd.read_csv(ARCHIVE, usecols=columns, parse_dates=["date"])
-    games = games.loc[
-        games["competition_type"].eq("domestic_league") | games["competition_id"].isin(EUROPE_HISTORY)
-    ].dropna(subset=["date", "home_club_id", "away_club_id", "home_club_goals", "away_club_goals"])
+    eligible = games["competition_type"].eq("domestic_league") | games["competition_id"].isin(EUROPE_HISTORY)
+    if include_domestic_cups:
+        eligible |= games["competition_type"].isin({"domestic_cup", "domestic_super_cup"})
+        eligible |= games["competition_id"].eq("USC")
+    games = games.loc[eligible].dropna(
+        subset=["date", "home_club_id", "away_club_id", "home_club_goals", "away_club_goals"]
+    )
     names = defaultdict(set)
     by_league = defaultdict(set)
     for row in games.itertuples(index=False):

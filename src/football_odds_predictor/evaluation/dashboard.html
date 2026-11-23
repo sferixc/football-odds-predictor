@@ -160,9 +160,7 @@ function render() {
     const title = element('div', undefined, 'card-title');
     title.append(element('h2', section.name));
     if (section.group === 'shots' && !section.quote_only) title.append(element('p', 'Model odds assume the player takes part.'));
-    if (section.group === 'cards') {
-      if (section.note) title.append(element('p', section.note));
-    }
+    if (section.note) title.append(element('p', section.note));
     if (section.quote_only || (section.group === 'cards' && report.competition && !report.european_card_model)) {
       title.append(element('p', 'Superbet prices only. Model data unavailable for this market.'));
     }

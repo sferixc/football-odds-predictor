@@ -159,6 +159,8 @@ The dashboard requests the upcoming public Superbet schedule, filters it to the 
 
 The dashboard displays 1X2, goals, cards, and corners. Player shots remain in the model and optional terminal report, but the dashboard tab and player filter have been removed. Color signals are deliberately absent under “No sensitivity adjustment”; choosing a five- or ten-percentage-point reduction lowers the predicted win probability by that many absolute points (for example, 60% to 55%) and calculates a provisional conservative return. These colors are not validated betting recommendations.
 
+The domestic corner bundle is generated separately with `uv run python -m football_odds_predictor.training.fit_corners`. It fits Poisson count regressions for home, away, and match corners in Premier League, Bundesliga, and La Liga, using the same chronological folds as the sporting experiments. It derives Over and Under prices at every half-line from 0.5 to 10.5 for a team and 0.5 to 18.5 for the match. The dashboard and terminal report show Superbet's exact quote beside each model line when that quote is available; an absent quote stays blank. For UCL and UEL, use the separate European corner bundle from `training.fit_europe_corners`. It uses the five most recent recorded club matches across competitions and displays how many had corner statistics. See the [European model notes](european-model-plan.md#european-cards-and-remaining-markets).
+
 ## First sporting model comparison
 
 **Question.** Can sporting data improve probability estimates over the historical frequency for each selection? Run:

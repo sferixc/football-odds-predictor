@@ -17,6 +17,7 @@ from ..data.referees import APPOINTMENTS
 from ..data.superbet_watch import discover
 from ..data.superbet_snapshot import utc_timestamp
 from ..models.cards import load_card_models
+from ..models.corners import load_corner_models
 from ..models.ucl import load_ucl_models
 from ..training.fit_sporting import DEFAULT_MODELS
 from .superbet_report import RAW, build_report, read_snapshot
@@ -161,6 +162,7 @@ def main() -> None:
     with args.models.open("rb") as handle:
         models = pickle.load(handle)
     load_card_models(models)
+    load_corner_models(models)
     load_ucl_models(models)
     try:
         server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(models))

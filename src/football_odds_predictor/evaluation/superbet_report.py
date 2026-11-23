@@ -22,6 +22,7 @@ from ..data.sporting import (
 )
 from ..data.superbet_snapshot import EUROPEAN_TOURNAMENTS, check_window, open_price, simple_promotions, utc_timestamp
 from ..models.cards import CARD_LINES, load_card_models, card_probabilities
+from ..models.corners import CORNER_LINES, corner_probabilities, european_corner_inputs, load_corner_models
 from ..models.sporting import predict_saved as predict_saved
 from ..models.ucl import goal_probabilities, load_ucl_models, predict_ucl
 from ..training.fit_sporting import DEFAULT_MODELS, PLAYER_LINES
@@ -315,6 +316,44 @@ def selection_rows(selections, probabilities, prices, promotions, stress) -> lis
     return rows
 
 
+def corner_sections(event, bundle, league, current, cutoff, promotions, stress):
+    """Use the same line, price and risk display for domestic and UEFA corners."""
+    lines = {target: set(defaults) for target, defaults in CORNER_LINES.items()}
+    targets = {market: target for market, target, _ in TEAM_MARKETS["corners"]}
+    for market in event["markets"]:
+        target = targets.get(market["id"])
+        if target is None:
+            continue
+        for odd in market["odds"]:
+            metadata = odd["metadata"]
+            line = (metadata.get("specifiers") or {}).get("total")
+            if re.fullmatch(r"\d+\.5(?:0*)", str(line)):
+                lines[target].add(float(line))
+    for offer in promotions:
+        line = (offer.get("specifiers") or {}).get("total")
+        if offer["market"] in lines and re.fullmatch(r"\d+\.5(?:0*)", str(line)):
+            lines[offer["market"]].add(float(line))
+    lines = {target: sorted(values) for target, values in lines.items()}
+    forecasts = corner_probabilities(bundle, league, current, cutoff, lines)
+    if forecasts is None:
+        return []
+    sections = []
+    for market, target, label in TEAM_MARKETS["corners"]:
+        rows = []
+        for line, over in zip(lines[target], forecasts[target]):
+            standard, boosted = team_prices(event, market, target, line, promotions)
+            scored = selection_rows(("Sub", "Peste"), (1 - over, over), standard, boosted, stress)
+            for row in scored:
+                row["selection"] += f" {line:g}"
+            rows.extend(scored)
+        section = {"group": "corners", "name": label, "rows": rows, "quote_only": False}
+        if league in ("CL", "EL"):
+            home, away = (int(current[f"{side}_observed_corners"].iat[0]) for side in ("home", "away"))
+            section["note"] = f"Corner data in the last five matches: home {home}/5, away {away}/5."
+        sections.append(section)
+    return sections
+
+
 def build_report(
     event: dict, observed: str, stress: Decimal | None, models: dict,
     groups: tuple[str, ...] = GROUPS, player_filter: str | None = None,
@@ -332,6 +371,15 @@ def build_report(
         competition = EUROPEAN_TOURNAMENTS[tournament]
         report["competition"] = "Champions League" if competition == "CL" else "Europa League"
         report["sections"] = european_offer_sections(event, groups, player_filter)
+        if "corners" in groups:
+            bundle = models.get("europe_corner_counts")
+            kickoff = utc_timestamp(fixture["utc_date"])
+            current = european_corner_inputs(bundle, fixture, kickoff)
+            corners = corner_sections(event, bundle, competition, current, kickoff,
+                                      simple_promotions(event), stress)
+            if corners:
+                report["sections"] = [section for section in report["sections"] if section["group"] != "corners"]
+                report["sections"].extend(corners)
         referee = pre_match_referee(event, utc_timestamp(observed)) if observed != "untimed probe" else fixture.get("referee")
         forecast = predict_ucl(
             models.get("ucl"), fixture, utc_timestamp(fixture["utc_date"]), competition, referee,
@@ -431,6 +479,12 @@ def build_report(
             "cards" in groups and observed != "untimed probe"
         ) else fixture.get("referee")
         for group in groups:
+            if group == "corners":
+                corners = corner_sections(event, models.get("corner_counts"), league, current,
+                                          cutoff, promotions, stress)
+                if corners:
+                    sections.extend(corners)
+                    continue
             for market_id, target, label in TEAM_MARKETS.get(group, ()):
                 if group == "cards":
                     scope = target.split("_", 1)[0]
@@ -560,6 +614,7 @@ def main() -> None:
             load_card_models(models)
         else:
             load_ucl_models(models)
+        load_corner_models(models)
         highlighted = args.color == "always" or (
             args.color == "auto" and sys.stdout.isatty() and "NO_COLOR" not in os.environ
             and os.environ.get("TERM") != "dumb"

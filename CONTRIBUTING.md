@@ -61,7 +61,7 @@ uv run python -m football_odds_predictor.training.fit_sporting
 
 Expect `Saved 13 trained models to data/processed/sporting-models.pkl`. Every contributor generates this file locally. The dashboard loads it at startup. Refit when the training data or model settings change. Load only a model file you generated yourself.
 
-The dashboard can also load two optional, locally generated bundles: `fit_cards` adds domestic count-based card forecasts, and `fit_ucl` adds Champions League and Europa League forecasts, including referee-aware European card models. Their extra input files are listed in the following sections. Run each fit command after downloading those inputs; you do not need to retrain models for every dashboard query.
+The dashboard can also load locally generated count bundles: `fit_cards` adds domestic card forecasts, `fit_corners` adds domestic corner forecasts, and `fit_ucl` adds Champions League and Europa League forecasts, including referee-aware European card models. `fit_corners` uses the same Football-Data CSVs and processed Elo features already listed above. The extra card and European inputs are listed in the following sections. Run each fit command after downloading its inputs; you do not need to retrain models for every dashboard query.
 
 To reproduce the [sporting calibration and final test](docs/superbet-assessment.md#calibration-check-and-final-sporting-test), run:
 
@@ -118,6 +118,26 @@ Restart the dashboard and watcher. The European models cover 1X2, full-match goa
 card totals in both competitions. European card forecasts require the two
 Transfermarkt event and lineup files. See the
 [European model plan](docs/european-model-plan.md) for coverage and evaluation.
+
+### European corner inputs
+
+Download the pinned [11footy release](https://github.com/fm-devlab/11footy-dataset/releases/tag/11footy-2026-11-10)
+alongside the match results above. Credit 11footy for these archives (CC BY-NC 4.0).
+
+```bash
+mkdir -p data/raw
+release=11footy-2026-11-10
+for part in european-cups.{champions-league,europa-league,conference-league,super-cup} \
+    england.premier-league germany.bundesliga spain.la-liga italy.serie-a france.ligue-1; do
+    curl -fL "https://github.com/fm-devlab/11footy-dataset/releases/download/$release/$part.csv.zip" \
+        -o "data/raw/$release-$part.csv.zip" || break
+done
+uv run python -m football_odds_predictor.training.fit_europe_corners
+```
+
+This builds `data/processed/europe-corner-models.pkl`. Restart the dashboard
+after fitting. The bundle stores the results available at build time. Update
+the local results archives and rebuild it as new results become available.
 
 ## 5. Run the daily workflow and browse reports
 

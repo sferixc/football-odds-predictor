@@ -27,6 +27,8 @@ Fit the models once after downloading the inputs. Repeat these commands only whe
 ```bash
 uv run python -m football_odds_predictor.training.fit_sporting
 uv run python -m football_odds_predictor.training.fit_cards
+uv run python -m football_odds_predictor.training.fit_corners
+uv run python -m football_odds_predictor.training.fit_europe_corners
 uv run python -m football_odds_predictor.training.fit_ucl
 ```
 
