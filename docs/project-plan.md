@@ -1,5 +1,7 @@
 # Football odds prediction
 
+The current research direction is described in [the Superbet assessment plan](superbet-assessment.md). This page records the Bet365 closing-odds experiments.
+
 V1 predicts one bookmaker's pre-match closing odds for home win, draw, and away win (1X2). Use the triplet the source labels as closing odds.
 
 1. **Data and EDA.** Use the free Football-Data.co.uk CSVs for the student research experiment. The 15 local files in `data/raw/football-data/` cover 2021/22–2025/26 for Premier League (`E0`), Bundesliga (`D1`), and La Liga (`SP1`). Use the Bet365 closing columns `B365CH`, `B365CD`, and `B365CA`. [Download index](https://football-data.co.uk/downloadm.php) · [Data usage policy](https://football-data.co.uk/contact.php)
