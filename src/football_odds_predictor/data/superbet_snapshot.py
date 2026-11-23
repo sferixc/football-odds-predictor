@@ -120,7 +120,7 @@ def read_event(payload: dict, event_id: int, kickoff: datetime) -> dict:
     return event
 
 
-def capture(event_id: int, kickoff: datetime, output_dir: Path) -> Path:
+def capture(event_id: int, kickoff: datetime, output_dir: Path, referee_appointment: dict | None = None) -> Path:
     """Fetch and save a single offer inside the pre-match window."""
     output = output_dir / f"{event_id}.json"
     if event_id <= 0 or output.exists():
@@ -143,6 +143,7 @@ def capture(event_id: int, kickoff: datetime, output_dir: Path) -> Path:
                 "observed_at_utc": observed_at.isoformat(),
                 "source": url,
                 "simple_promotions": promotions,
+                **({"referee_appointment": referee_appointment} if referee_appointment else {}),
                 "event": event,
             },
             handle, ensure_ascii=False, indent=2,

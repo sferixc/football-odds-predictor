@@ -60,11 +60,19 @@ def pre_match_referee(event: dict, cutoff) -> str | None:
     referee = fixture.get("referee")
     if isinstance(referee, str) and referee.strip():
         return referee
+    automatic = event.get("referee_appointment") or {}
+    name = automatic.get("name")
+    observed = pd.to_datetime(automatic.get("observed_at_utc"), utc=True, errors="coerce")
+    if not isinstance(name, str) or not name.strip() or pd.isna(observed) or observed > cutoff:
+        name = None
     if not APPOINTMENTS.is_file():
-        return None
+        return name
     rows = pd.read_csv(APPOINTMENTS, dtype={"event_id": "string"})
     timestamps = pd.to_datetime(rows["observed_at_utc"], utc=True, errors="coerce")
     matches = rows.loc[rows["event_id"].eq(str(event["event_id"])) & timestamps.le(cutoff)]
     if matches.empty:
-        return None
-    return matches.loc[timestamps.loc[matches.index].idxmax(), "referee"]
+        return name
+    index = timestamps.loc[matches.index].idxmax()
+    if name is not None and observed > timestamps.loc[index]:
+        return name
+    return matches.loc[index, "referee"]

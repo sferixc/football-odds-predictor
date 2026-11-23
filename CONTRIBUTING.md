@@ -95,7 +95,15 @@ curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/games.csv.gz -
 uv run python -m football_odds_predictor.training.fit_cards
 ```
 
-If a timed offer omits the assigned referee, the report can read
+The watcher uses the fixture schedule to look up referee assignments during the
+last 24 hours before kickoff for Premier League, La Liga, Bundesliga, Champions
+League, and Europa League. It checks again before the odds capture. It uses the
+official UEFA match listing for Champions League when available and the public
+Referee Observer list for the other lookups. A snapshot records the pre-match
+name, source, and observation time separately from the original Superbet payload.
+The public lists can omit matches or give conflicting names.
+
+The report can also read
 `data/raw/referee-appointments.csv` with columns `event_id,referee,observed_at_utc`.
 Use the name as written in the league archive and the UTC timestamp at which
 the assignment was observed. The report uses the most recent assignment

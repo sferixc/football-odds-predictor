@@ -78,6 +78,8 @@ def read_snapshot(path: Path, probe: bool) -> tuple[dict, str]:
         event = data["event"]
         observed = utc_timestamp(data["observed_at_utc"])
         check_window(utc_timestamp(event["fixture"]["utc_date"]), observed)
+        if "referee_appointment" in data:
+            event = {**event, "referee_appointment": data["referee_appointment"]}
         return event, observed.isoformat()
     if probe and len(data.get("events", [])) == 1:
         return data["events"][0], "untimed probe"

@@ -10,12 +10,14 @@ import time
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+from .referee_lookup import find_appointment
 from .superbet_snapshot import ENDPOINT, UCL_TOURNAMENT, UEL_TOURNAMENT, capture, utc_timestamp
 
 LEAGUES = {106: "Premier League", 245: "Bundesliga", 98: "La Liga", UCL_TOURNAMENT: "Champions League", UEL_TOURNAMENT: "Europa League"}
 REFRESH_INTERVAL = timedelta(hours=1)
 TARGET_LEAD = timedelta(minutes=15)
 MINIMUM_LEAD = timedelta(minutes=10)
+REFEREE_LOOKAHEAD = timedelta(days=1)
 
 
 @dataclass(frozen=True)
@@ -80,10 +82,12 @@ def watch(output_dir: Path) -> None:
     """Refresh the schedule, then wait for either a capture or the next refresh."""
     fixtures = []
     attempted: set[tuple[int, datetime]] = set()
+    appointments = {}
     refresh_at = datetime.now(UTC)
     while True:
         now = datetime.now(UTC)
-        if now >= refresh_at:
+        refreshed = now >= refresh_at
+        if refreshed:
             try:
                 fixtures = discover(now)
             except (KeyError, OSError, ValueError) as error:
@@ -100,11 +104,33 @@ def watch(output_dir: Path) -> None:
             # Record the attempt before fetching to avoid repeating a failed request in the loop.
             attempted.add((fixture.event_id, fixture.kickoff))
             try:
-                capture(fixture.event_id, fixture.kickoff, output_dir)
+                appointment = find_appointment(fixture, now, fresh=True)
+                previous = appointments.get((fixture.event_id, fixture.kickoff))
+                if appointment and appointment["name"] != (previous or {}).get("name"):
+                    print(f"{fixture.name}: referee {appointment['name']}", flush=True)
+                appointment = appointment or previous
+                capture(fixture.event_id, fixture.kickoff, output_dir, appointment)
             except (KeyError, OSError, ValueError) as error:
                 print(f"{fixture.name}: {error}", file=sys.stderr, flush=True)
             continue
 
+        if refreshed:
+            active = {(item.event_id, item.kickoff) for item in fixtures}
+            appointments = {key: value for key, value in appointments.items() if key in active}
+            for item in fixtures:
+                now = datetime.now(UTC)
+                if fixture is not None and fixture.capture_time <= now:
+                    break
+                if TARGET_LEAD < item.kickoff - now <= REFEREE_LOOKAHEAD:
+                    appointment = find_appointment(item, now)
+                    if appointment is not None:
+                        key = item.event_id, item.kickoff
+                        previous = appointments.get(key, {})
+                        if appointment["name"] != previous.get("name"):
+                            print(f"{item.name}: referee {appointment['name']}", flush=True)
+                        appointments[key] = appointment
+
+        now = datetime.now(UTC)
         wake_at = min(refresh_at, fixture.capture_time) if fixture is not None else refresh_at
         time.sleep(max(0, min(60, (wake_at - now).total_seconds())))
 
