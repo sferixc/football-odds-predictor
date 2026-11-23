@@ -52,12 +52,24 @@ def validation_folds(
     The first fold learns from 2021/22 and scores 2022/23. The next fold adds
     2022/23 to training and scores 2023/24. The 2025/26 season is held for testing.
     """
-    seasons = dataset["season_start_year"]
     for season in range(FIRST_SEASON + 1, TEST_SEASON):
-        train = dataset.loc[seasons.ge(FIRST_SEASON) & seasons.lt(season)]
-        validation = dataset.loc[seasons.eq(season)]
-        if train.empty or validation.empty:
-            raise ValueError(f"Missing training or validation data for season {season}")
-        if train["source_kickoff"].max() >= validation["source_kickoff"].min():
-            raise ValueError(f"Training and validation dates overlap for season {season}")
+        train, validation = _split_at_season(dataset, season)
         yield season, train, validation
+
+
+def final_test_split(dataset: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Train on 2021/22 through 2024/25 and score the held-out 2025/26 season."""
+    return _split_at_season(dataset, TEST_SEASON)
+
+
+def _split_at_season(
+    dataset: pd.DataFrame, season: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    seasons = dataset["season_start_year"]
+    train = dataset.loc[seasons.ge(FIRST_SEASON) & seasons.lt(season)]
+    evaluation = dataset.loc[seasons.eq(season)]
+    if train.empty or evaluation.empty:
+        raise ValueError(f"Missing training or evaluation data for season {season}")
+    if train["source_kickoff"].max() >= evaluation["source_kickoff"].min():
+        raise ValueError(f"Training and evaluation dates overlap for season {season}")
+    return train, evaluation

@@ -139,4 +139,21 @@ Run `uv run python -m football_odds_predictor.training.baseline --model lstm` on
 | 2024/25 | 23 | 0.1508 | 0.1497 | 0.1324 |
 | Fold mean | | | **0.1578** | **0.1502** |
 
-The LSTM's mean decimal-odds MAE was 0.6489. It improved on Ridge on average, and tuned XGBoost led on the primary metric in all three folds. This comparison covers one LSTM setup and seed. The 2025/26 test season remains reserved.
+The LSTM's mean decimal-odds MAE was 0.6489. It improved on Ridge on average, and tuned XGBoost led on the primary metric in all three folds. This comparison covers one LSTM setup and seed. We selected XGBoost for the final test.
+
+## Final test
+
+**Question.** How well does the selected XGBoost configuration predict closing odds on a full season held out from model selection?
+
+Run `uv run python -m football_odds_predictor.evaluation.final_test` on dataset `01551de`. Train on 4,024 eligible fixtures from 2021/22 through 2024/25, then predict 1,051 eligible fixtures from 2025/26. The model uses the same 102 inputs and settings selected on validation, including depth 4, 400 trees per outcome, learning rate 0.05, and seed 42.
+
+**Worked example.** For Girona–Rayo Vallecano on 15 August 2025, the model predicted **2.62 / 3.51 / 2.57**, compared with actual closing odds **2.45 / 3.20 / 3.10**.
+
+| League | Test fixtures | Log-odds MAE | Decimal-odds MAE |
+| --- | ---: | ---: | ---: |
+| Premier League | 375 | 0.1365 | 0.5335 |
+| Bundesliga | 301 | 0.1538 | 0.6498 |
+| La Liga | 375 | 0.1237 | 0.4954 |
+| **Overall** | **1,051** | **0.1369** | **0.5532** |
+
+The average absolute difference was 0.55 decimal-odds units across the three outcomes. Bundesliga had the highest error on both metrics in this test. The result applies to fixtures with complete histories and valid closing odds.
