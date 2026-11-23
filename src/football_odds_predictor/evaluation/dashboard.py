@@ -2,6 +2,7 @@
 
 import argparse
 from decimal import Decimal, InvalidOperation
+from errno import EADDRINUSE
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -9,6 +10,7 @@ from pathlib import Path
 import pickle
 from urllib.parse import parse_qs, urlsplit
 
+from ..models.cards import load_card_models
 from ..training.fit_sporting import DEFAULT_MODELS
 from .superbet_report import RAW, build_report, read_snapshot
 
@@ -93,7 +95,15 @@ def main() -> None:
         parser.error("Model file missing. Run football_odds_predictor.training.fit_sporting first.")
     with args.models.open("rb") as handle:
         models = pickle.load(handle)
-    with ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(models)) as server:
+    load_card_models(models)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(models))
+    except OSError as error:
+        if error.errno == EADDRINUSE:
+            parser.exit(1, f"Port {args.port} is already in use. Stop the earlier dashboard "
+                        "or rerun with --port 0 to pick a free port.\n")
+        parser.exit(1, f"Could not start the dashboard on port {args.port}: {error.strerror}\n")
+    with server:
         print(f"Dashboard: http://127.0.0.1:{server.server_port}", flush=True)
         try:
             server.serve_forever()

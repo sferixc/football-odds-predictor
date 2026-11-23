@@ -20,6 +20,7 @@ from ..data.sporting import (
     read_player_appearances, read_team_matches, team_features,
 )
 from ..data.superbet_snapshot import check_window, open_price, simple_promotions, utc_timestamp
+from ..models.cards import CARD_LINES, load_card_models, card_probabilities
 from ..models.sporting import predict_saved as predict_saved
 from ..training.fit_sporting import DEFAULT_MODELS, PLAYER_LINES
 from ..training.sporting import TEAM_THRESHOLDS
@@ -49,6 +50,11 @@ TEAM_MARKETS = {
     ),
 }
 GROUPS = ("1x2", "goals", "cards", "corners", "shots")
+CARD_OFFER_MARKETS = {
+    690: "match",
+    700: "home",
+    708: "away",
+}
 BADGE_STYLE = {
     "red": "97;41", "yellow": "30;103", "orange": "30;48;5;208",
     "green": "30;102", "purple": "97;45",
@@ -142,6 +148,36 @@ def team_prices(event: dict, market_id: int | None, target: str, line: float,
     return standard, promoted
 
 
+def card_offer_sections(event: dict) -> list[dict]:
+    """Display bookmaker card totals using the provider's separate settlement market."""
+    sections = []
+    for market in event["markets"]:
+        scope = CARD_OFFER_MARKETS.get(market["id"])
+        if scope is None:
+            continue
+        rows = []
+        for odd in market["odds"]:
+            metadata = odd["metadata"]
+            specifiers = metadata.get("specifiers") or {}
+            line = specifiers.get("total")
+            if line is None or not odd.get("display"):
+                continue
+            side = line_selection(metadata["name"], specifiers, line)
+            if side:
+                direction = "Over" if side == "Peste" else "Under"
+                rows.append({
+                    "selection": f"{direction} {line}",
+                    "standard": odd["price"] if open_price(odd) else None,
+                })
+        if rows:
+            sections.append({
+                "group": "cards", "name": f"Superbet total cards · {scope}", "rows": rows,
+                "quote_only": True, "card_scope": scope,
+                "note": "Superbet counts yellow and red cards using its own settlement rules.",
+            })
+    return sections
+
+
 def _player_name(name: str) -> str:
     decomposed = unicodedata.normalize("NFKD", name.casefold())
     return "".join(letter for letter in decomposed if letter.isalnum())
@@ -227,16 +263,16 @@ def selection_rows(selections, probabilities, prices, promotions, stress) -> lis
     for selection, probability in zip(selections, probabilities):
         p = Decimal(str(probability))
         standard, promoted = prices.get(selection), promotions.get(selection)
-        available = [price for price in (standard, promoted) if price is not None]
+        price = promoted if promoted is not None else standard
         row = {
             "selection": {"Sub": "Under", "Peste": "Over"}.get(selection, selection),
             "loss": float(1 - p),
             "fair": float(1 / p) if p > 0 else None, "standard": standard,
             "promotion": promoted, "return": None, "prudent": None, "signal": None,
         }
-        if available and p > 0:
+        if price is not None and p > 0:
             score = assess_offer(
-                odds=Decimal(str(max(available))), win_probability=p,
+                odds=Decimal(str(price)), win_probability=p,
                 conservative_win_probability=p if stress is None else max(Decimal(0), p - stress),
                 stake=Decimal(1), budget=Decimal(1),
             )
@@ -288,16 +324,52 @@ def build_report(
                                        prices, boosted, stress),
             })
 
+        card_quotes = card_offer_sections(event) if "cards" in groups else []
         for group in groups:
             for market_id, target, label in TEAM_MARKETS.get(group, ()):
+                if group == "cards" and LEAGUES[int(fixture["tournament_id"])][0] == "E0":
+                    scope = target.split("_", 1)[0]
+                    bundle = models.get("yellow_card_counts")
+                    proxy = bundle is not None and f"{scope}_card_points" in bundle["models"]
+                    forecast = f"{scope}_card_points" if proxy else target
+                    overs, with_referee = card_probabilities(
+                        bundle, current, forecast, cutoff, fixture.get("referee"),
+                    )
+                    if overs is not None:
+                        prices = {
+                            row["selection"]: row["standard"] for section in card_quotes
+                            if section["card_scope"] == scope for row in section["rows"]
+                        } if proxy else {}
+                        rows = []
+                        for line, over in zip(CARD_LINES, overs):
+                            rows.extend(selection_rows(
+                                (f"Under {line:g}", f"Over {line:g}"),
+                                (1 - over, over), prices, {}, stress,
+                            ))
+                        sections.append({
+                            "group": group, "name": f"{scope.title()} total cards (proxy)" if proxy else label,
+                            "rows": rows,
+                            "card_scope": scope, "proxy": proxy,
+                            "note": (
+                                "Estimated total uses aggregate yellows + 2 × reds. "
+                                "Second yellows and bench cards may differ from settlement."
+                                if proxy else "Model estimates for yellow cards only."
+                            ) + (" Includes referee history." if with_referee else " Team inputs only."),
+                        })
+                        continue
                 threshold = TEAM_THRESHOLDS[target]
                 standard, boosted = team_prices(event, market_id, target, threshold, promotions)
                 probabilities = predict_saved(models, current, target, cutoff, threshold)[0]
+                selections = ((f"Under {threshold:g}", f"Over {threshold:g}")
+                              if group == "cards" else ("Sub", "Peste"))
                 sections.append({
                     "group": group, "name": f"{label} ({threshold:g})",
-                    "rows": selection_rows(("Sub", "Peste"), probabilities, standard, boosted, stress),
-                    "note": "Superbet total cards has a separate settlement definition." if group == "cards" else "",
+                    "rows": selection_rows(selections, probabilities, standard, boosted, stress),
+                    **({"card_scope": target.split("_", 1)[0]} if group == "cards" else {}),
+                    "note": "Model estimates for yellow cards only." if group == "cards" else "",
                 })
+        if "cards" in groups:
+            sections.extend(card_quotes)
     if "shots" in groups:
         rows, note = player_rows(event, player_filter, promotions, models)
         sections.append({"group": "shots", "name": "Player total shots", "rows": rows, "note": note})
@@ -315,7 +387,7 @@ def print_report(
         print("Replay of an untimed offer. Probabilities use the local results archive.")
     if stress is not None:
         print(f"Provisional color uses a {stress * 100:g} percentage-point reduction.")
-    print("Return is calculated at the higher displayed price.")
+    print("Return uses Promo when available and Superbet otherwise.")
     if report["last_results"]:
         print(f"Latest team results used (home / away): {' / '.join(report['last_results'])}")
 
@@ -324,7 +396,12 @@ def print_report(
 
     for section in report["sections"]:
         print(f"\n[{section['name']}]")
-        if section["group"] == "shots":
+        if section.get("quote_only"):
+            print(f"{'Selection':<14} {'Superbet':>9}")
+            for row in section["rows"]:
+                price = "Closed" if row["standard"] is None else fmt(row["standard"], ".2f")
+                print(f"{row['selection']:<14} {price:>9}")
+        elif section["group"] == "shots":
             print(f"{'Player and selection':<43} {'Model odds':>10} {'Superbet':>9} {'Promo':>8} {'Last result':>12}")
             for row in section["rows"]:
                 print(f"{row['selection']:<43} {fmt(row['fair'], '.2f'):>10} {fmt(row['standard'], '.2f'):>9} "
@@ -370,6 +447,7 @@ def main() -> None:
             raise ValueError("Model file missing. First run football_odds_predictor.training.fit_sporting.")
         with args.models.open("rb") as handle:
             models = pickle.load(handle)
+        load_card_models(models)
         highlighted = args.color == "always" or (
             args.color == "auto" and sys.stdout.isatty() and "NO_COLOR" not in os.environ
             and os.environ.get("TERM") != "dumb"

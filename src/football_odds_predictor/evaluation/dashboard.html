@@ -5,42 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Football Odds Dashboard</title>
 <style>
-:root{font-family:Inter,system-ui,sans-serif;color:#162c30;background:#eef3f0;line-height:1.5;color-scheme:light}
+:root{font-family:Inter,system-ui,sans-serif;color:#202724;background:#f7f7f3;line-height:1.5;color-scheme:light}
 *{box-sizing:border-box}body{margin:0}button,select,input{font:inherit}button,select{cursor:pointer}
-header{background:#132f2d;color:#f7fcfa;padding:18px 0}.wrap{width:min(1160px,calc(100% - 40px));margin-inline:auto}
-.brand{display:flex;align-items:center;gap:12px;font-weight:750}.mark{width:14px;height:14px;border:3px solid #9dec9f;border-radius:50%}
-main{padding-block:30px 55px}.overview{background:#193d37;color:white;border-radius:20px;padding:30px;display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,340px);gap:25px;align-items:center}
+header{border-bottom:1px solid #dddfd7;padding:14px 0;font-weight:700}.wrap{width:min(1160px,calc(100% - 40px));margin-inline:auto}
+main{padding-block:30px 55px}.overview{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,340px);gap:25px;align-items:end;padding-bottom:22px}
 h1,h2,p{margin:0}h1{font-size:clamp(1.85rem,4vw,3.05rem);line-height:1.12;letter-spacing:-.05em}
-#metadata{color:#d7e9e0;margin-top:10px;font-size:.92rem}.controls{display:grid;gap:12px}.control{display:grid;gap:4px}
+#metadata{color:#526158;margin-top:10px;font-size:.92rem}.controls{display:grid;gap:8px}.control{display:grid;gap:4px}
 label{font-size:.875rem;font-weight:650}select,input{width:100%;padding:10px 38px 10px 12px;border:1px solid #cddbd3;background:#fff;color:#142d28;border-radius:9px}
 select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#315951 50%),linear-gradient(135deg,#315951 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat}
 input{padding-right:12px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:19px 0 14px}
-button{padding:8px 15px;border:1px solid #c8d7cf;border-radius:20px;background:#f9fcfa;color:#24443a;font-weight:650}
-button[aria-pressed=true]{background:#255445;color:#fff;border-color:#255445}
+button{padding:7px 11px;border:0;border-bottom:2px solid transparent;background:transparent;color:#48564e;font-weight:650}
+button[aria-pressed=true]{color:#172f26;border-bottom-color:#294b39}
 #player-filter{max-width:340px;margin-bottom:12px}#status{color:#496258;margin-bottom:12px;min-height:1.5rem}
-.card{background:#fff;border:1px solid #dbe4de;border-radius:15px;margin-bottom:12px;overflow:hidden}
+.card{background:#fff;border:1px solid #dddfd7;border-radius:6px;margin-bottom:16px;overflow:hidden}
 .card-title{padding:15px 18px}.card-title p{color:#4b6458;font-size:.9rem;margin-top:3px}
 h2{font-size:1.05rem;letter-spacing:-.01em}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 th,td{padding:10px 14px;border-top:1px solid #e5ebe7}th{background:#f5f8f6;font-size:.875rem;color:#405d52}th:first-child,td:first-child{text-align:left;padding-left:18px}td{font-size:.95rem}.model{font-weight:750;color:#185643}
 .badge{font-size:.875rem;display:inline-block;text-align:center;font-weight:750;border-radius:6px;padding:3px 8px;min-width:70px;text-transform:capitalize}
-.red{background:#fbdad7;color:#851d23}.yellow{background:#fbefb5;color:#624900}.orange{background:#ffdcb8;color:#792d00}.green{background:#d0f2d5;color:#14542b}.purple{background:#e9ddfb;color:#552884}
+.red{--tint:#fff0ee;--accent:#bd4044;--badge:#fbdad7;--ink:#851d23}
+.yellow{--tint:#fff8d9;--accent:#a57800;--badge:#fbefb5;--ink:#624900}
+.orange{--tint:#fff1e1;--accent:#c25b16;--badge:#ffdcb8;--ink:#792d00}
+.green{--tint:#eaf8ed;--accent:#278a4a;--badge:#d0f2d5;--ink:#14542b}
+.purple{--tint:#f5efff;--accent:#8052bb;--badge:#e9ddfb;--ink:#552884}
+.highlighted td{background:var(--tint)}
+.highlighted td:first-child{box-shadow:inset 3px 0 var(--accent);font-weight:650}
+.highlighted .badge{background:var(--badge);color:var(--ink)}
+.priced{font-weight:750;text-decoration:underline;text-decoration-color:#7a9384;text-underline-offset:4px}
+.index{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));list-style:none;margin:8px 0 5px;padding:0}
+.index li{padding:6px 9px;background:var(--tint);color:var(--ink);font-size:.82rem;overflow-wrap:anywhere}
+.index li:first-child{border-radius:0 0 0 4px}.index li:last-child{border-radius:0 0 4px 0}
+.index strong,.index span{display:block}.index strong{font-weight:750}
+.index-bar{height:5px;border-radius:4px 4px 0 0;background:linear-gradient(90deg,#bd4044,#c49a19,#c25b16,#278a4a,#8052bb);margin-bottom:-8px}
+#legend{margin:4px 0 12px}#legend h2{margin-bottom:6px}
 :focus-visible{outline:3px solid #76ae83;outline-offset:2px}[hidden]{display:none!important}
-@media(max-width:650px){.wrap{width:calc(100% - 24px)}main{padding-top:15px}.overview{grid-template-columns:1fr;padding:20px}th,td{padding:8px 10px}}
+@media(max-width:650px){.wrap{width:calc(100% - 24px)}main{padding-top:15px}.overview{grid-template-columns:1fr;gap:14px}.index li{padding:5px 3px;font-size:.72rem}th,td{padding:8px 10px}}
 </style>
 </head>
 <body>
-<header><div class="wrap brand"><span class="mark" aria-hidden="true"></span>Football Odds Dashboard</div></header>
+<header><div class="wrap">Football Odds</div></header>
 <main class="wrap">
   <div class="overview">
     <div><h1 id="fixture">Saved match offers</h1><p id="metadata"></p></div>
     <div class="controls">
       <div class="control"><label for="match">Match</label><select id="match"></select></div>
       <div class="control"><label for="stress">Sensitivity scenario</label>
-        <select id="stress"><option value="0">No sensitivity adjustment</option><option value="5">−5 percentage points</option><option value="10">−10 percentage points</option></select>
+        <select id="stress"><option value="0">No sensitivity adjustment</option><option value="5" selected>−5 percentage points</option><option value="10">−10 percentage points</option></select>
       </div>
     </div>
   </div>
   <nav id="markets" class="toolbar" aria-label="Filter by market"></nav>
+  <section id="legend" aria-labelledby="legend-title" hidden>
+    <h2 id="legend-title">Value signal · return under stress</h2>
+    <div class="index-bar" aria-hidden="true"></div>
+    <ol class="index">
+      <li class="red"><strong>Red</strong><span>Negative or flat estimate</span></li>
+      <li class="yellow"><strong>Yellow</strong><span>Edge disappears under stress</span></li>
+      <li class="orange"><strong>Orange</strong><span>Above 0%, below 5%</span></li>
+      <li class="green"><strong>Green</strong><span>5% to below 10%</span></li>
+      <li class="purple"><strong>Purple</strong><span>10% or more</span></li>
+    </ol>
+  </section>
   <div id="player-filter" class="control" hidden><label for="player">Find a player</label><input id="player" type="search" placeholder="Player name"></div>
   <p id="status" role="status" aria-live="polite"></p>
   <div id="sections"></div>
@@ -51,7 +75,7 @@ const stress = document.querySelector('#stress');
 const status = document.querySelector('#status');
 const sections = document.querySelector('#sections');
 const player = document.querySelector('#player');
-const marketNames = { '1x2': '1X2', goals: 'Goals', cards: 'Yellow cards', corners: 'Corners', shots: 'Player shots' };
+const marketNames = { '1x2': '1X2', goals: 'Goals', cards: 'Cards', corners: 'Corners', shots: 'Player shots' };
 const signals = new Set(['red', 'yellow', 'orange', 'green', 'purple']);
 let active = '1x2';
 let report = null;
@@ -79,18 +103,64 @@ async function get(path) {
   if (!response.ok) throw new Error(data.error || 'Request failed.');
   return data;
 }
+function displaySections(rawSections) {
+  const cards = new Map();
+  for (const section of rawSections.filter(section => section.group === 'cards')) {
+    const scope = section.card_scope;
+    if (!cards.has(scope)) cards.set(scope, { rows: new Map(), note: '' });
+    const table = cards.get(scope);
+    if (!section.quote_only) {
+      table.note = section.note;
+      table.proxy = section.proxy;
+    }
+    for (const item of section.rows) {
+      const [direction, line] = item.selection.split(' ');
+      const threshold = Number(line);
+      const selection = direction + ' ' + threshold;
+      const row = table.rows.get(selection) ?? { selection, direction, threshold };
+      if (section.quote_only) {
+        row.standard = item.standard;
+        row.quoteListed = true;
+      } else {
+        Object.assign(row, {
+          fair: item.fair, loss: item.loss, promotion: item.promotion,
+          return: item.return, prudent: item.prudent, signal: item.signal,
+        });
+      }
+      table.rows.set(selection, row);
+    }
+  }
+  return [
+    ...rawSections.filter(section => section.group !== 'cards'),
+    ...[...cards].map(([scope, table]) => ({
+      group: 'cards',
+      name: scope[0].toUpperCase() + scope.slice(1) + (table.proxy ? ' total cards (proxy)' : ' cards'),
+      note: table.note,
+      rows: [...table.rows.values()].sort((a, b) =>
+        a.threshold - b.threshold || b.direction.localeCompare(a.direction)),
+    })),
+  ];
+}
 function render() {
   sections.replaceChildren();
+  const available = displaySections(report?.sections ?? []);
+  const groups = new Set(available.map(section => section.group));
+  if (groups.size && !groups.has(active)) active = groups.values().next().value;
   document.querySelector('#player-filter').hidden = active !== 'shots';
+  document.querySelector('#legend').hidden = !available.some(section =>
+    section.group === active && section.rows.some(row => signals.has(row.signal)));
   for (const button of document.querySelectorAll('#markets button')) {
+    button.hidden = !groups.has(button.dataset.group);
     button.setAttribute('aria-pressed', String(button.dataset.group === active));
   }
-  if (!report) return;
-  for (const section of report.sections.filter(section => section.group === active)) {
+  for (const section of available.filter(section => section.group === active)) {
     const card = element('section', undefined, 'card');
     const title = element('div', undefined, 'card-title');
     title.append(element('h2', section.name));
-    if (section.note) title.append(element('p', section.note));
+    if (section.group === 'shots') title.append(element('p', 'Model odds assume the player takes part.'));
+    if (section.group === 'cards') {
+      if (section.note) title.append(element('p', section.note));
+    }
     card.append(title);
     const shots = section.group === 'shots';
     const query = player.value.trim().toLowerCase();
@@ -102,21 +172,31 @@ function render() {
     }
     const table = element('table');
     const head = table.createTHead().insertRow();
-    const columns = shots ? ['Selection', 'Model odds', 'Superbet', 'Promo', 'Last result']
-      : ['Selection', 'Model odds', 'Superbet', 'Promo', 'Loss risk', 'Est. return', 'Prudent', 'Signal'];
+    let columns = ['Selection', 'Model odds', 'Superbet', 'Promo', 'Loss risk', 'Est. return', 'Stressed return', 'Signal'];
+    if (shots) columns = ['Selection', 'Model odds', 'Superbet', 'Promo', 'Last result'];
     for (const column of columns) head.append(element('th', column));
     const body = table.createTBody();
     for (const item of rows) {
       const row = body.insertRow();
+      const cards = section.group === 'cards';
+      const offerStatus = item.standard != null ? 'Open' : (item.quoteListed ? 'Closed' : 'Not listed');
+      const standard = cards && item.standard == null
+        ? offerStatus
+        : asOdds(item.standard);
+      const hasSignal = signals.has(item.signal);
+      if (hasSignal) row.classList.add('highlighted', item.signal);
+      const scored = item.return != null;
       row.append(element('td', item.selection), element('td', asOdds(item.fair), 'model'),
-        element('td', asOdds(item.standard)), element('td', asOdds(item.promotion)));
+        element('td', standard, scored && item.promotion == null ? 'priced' : ''),
+        element('td', asOdds(item.promotion), scored && item.promotion != null ? 'priced' : ''));
       if (shots) {
         row.append(element('td', item.last_result));
       } else {
         row.append(element('td', asPercent(item.loss)), element('td', asPercent(item.return, true)),
           element('td', asPercent(item.prudent, true)));
         const signal = element('td');
-        signal.append(signals.has(item.signal) ? element('span', item.signal, 'badge ' + item.signal) : element('span', '—'));
+        const label = hasSignal ? item.signal : '';
+        signal.append(label ? element('span', label, 'badge') : element('span', '—'));
         row.append(signal);
       }
     }
@@ -141,7 +221,9 @@ async function loadReport() {
     const parts = ['Kickoff ' + timestamp(report.kickoff), 'Offer ' + timestamp(report.observed)];
     if (report.last_results.length) parts.push('Team results through ' + report.last_results.join(' / '));
     document.querySelector('#metadata').textContent = parts.join(' · ');
-    status.textContent = stress.value === '0' ? '' : 'Signals use the selected sensitivity scenario and the higher displayed price.';
+    status.textContent = stress.value === '0'
+      ? 'Choose a sensitivity scenario to show signal colors.'
+      : 'Provisional signals. The underlined price is used for return: Promo when available, otherwise Superbet.';
     render();
   } catch (error) {
     if (id === requestId) status.textContent = error.message;

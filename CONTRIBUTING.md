@@ -110,7 +110,7 @@ Over             1.67       1.85        —      40.2%       +10.6%     +1.4%   
 ```
 
 - **Model odds** are the estimated break-even decimal price. **Loss risk** is the estimated chance of losing. **Superbet / Promo** show the standard and matching promotional prices.
-- **Est. return** uses the higher displayed price. **Prudent / Color** appear when you pass a sensitivity setting such as `--stress-pp 5`, which reduces the win probability by five percentage points. The colors are provisional.
+- **Est. return** uses Promo when available and the standard Superbet price otherwise. **Prudent / Color** appear when you pass a sensitivity setting such as `--stress-pp 5`, which reduces the win probability by five percentage points. The colors are provisional.
 - Signal labels have colored backgrounds in interactive terminals. Use `--color always` to force highlighting or `--color never` for plain text.
 - The yellow-card section shows model estimates pending settlement mapping. Player shot model odds assume the player takes part. Check the latest team and player result dates printed by the report.
 

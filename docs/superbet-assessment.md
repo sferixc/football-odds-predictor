@@ -205,3 +205,31 @@ Lower is better. This feature worsened all three validation scores, so the saved
 ```bash
 uv run python -m football_odds_predictor.evaluation.referee_cards
 ```
+
+### Expanded yellow-card lines
+
+Fit the Premier League count models with `uv run python -m football_odds_predictor.training.fit_cards`.
+This writes `data/processed/yellow-card-models.pkl`. Restart the dashboard to load it.
+Three Poisson count models cover home, away, and match yellow totals. Each has a
+team-only version and a version with the referee's historical mean. A single
+count distribution per target gives ordered Over probabilities across 0.5–9.5.
+The expanded models use a named referee from the pre-match fixture when prior
+results are available and fall back to the team-only version otherwise. The
+Brentford–Everton capture has no referee field. Other leagues retain their
+original yellow-card lines.
+
+The training command compares both variants on the same expanding validation
+folds and prints Brier scores and event counts for every line. Only six of
+1,096 validation matches went over 9.5 total yellows. The 2025/26 season is
+held out from model fitting. Superbet total-card quotes are shown in their
+own tables for all open lines in the capture.
+
+### Experimental total-card signals
+
+The same fit command also trains Premier League models for aggregate yellows
+plus twice aggregate reds. The dashboard labels this target as a proxy and
+applies the standard five-color scale only to matching open lines in the
+snapshot. The Brier scores measure the aggregate proxy, whose labels may
+differ from Superbet settlement because the source omits the circumstances
+of individual cards. Exact settlement validation still needs event-level
+data. Refresh the model file with the fit command and restart the dashboard.
