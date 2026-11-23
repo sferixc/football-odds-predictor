@@ -3,9 +3,9 @@
 ## Results and club identity
 
 - Use Transfermarkt club IDs across domestic leagues, Champions League and Europa League. Qualifiers and Conference League also contribute to team history. Keep domestic, UCL and Europa League targets separate when comparing models.
-- Use the Transfermarkt archive for historical scores and referees, OpenFootball for the available Slovak seasons and Open Matchday for current results. Keep raw snapshots local. Log the latest known result per club and audit unmatched clubs before expanding market coverage.
+- The local inputs are `data/raw/transfermarkt/games.csv.gz`, `game_events.csv.gz`, and `game_lineups.csv.gz`; current results come from `data/raw/open-matchday/results-2627.zip` and the available Slovak seasons are in `data/raw/openfootball/`. Raw files are ignored by Git, so each contributor downloads them locally. Log the latest known result per club and audit unmatched clubs before expanding market coverage.
 - Give each club one Elo state. Update both clubs after the match day. Early results warm up ratings before the training window. An optional dated Elo seed can initialize that same state. Evaluate an external seed only once a historical snapshot and club ID join have been verified.
-- For each fixture, use the last five available matches across competitions. Store the opponent's pre-match Elo and the source competition with each observation. Use the latest state strictly before the incoming fixture date. If either team has fewer than five matches or last played more than 60 days ago in the archive, show bookmaker prices.
+- Maintain one Elo state per club across domestic and UEFA matches, rather than separate domestic and European ratings. For each fixture, use the last five available matches across competitions. Store the opponent's pre-match Elo and the source competition with each observation. Use the latest state strictly before the incoming fixture date. If either team has fewer than five matches or last played more than 60 days ago in the archive, the European forecast is unavailable and the report falls back to displayed bookmaker prices.
 
 ## Training and evaluation
 
@@ -16,11 +16,11 @@
 
 ## European cards and remaining markets
 
+- European 1X2 and full-time goals are implemented for Champions League and Europa League. The saved bundle from `training.fit_ucl` also contains referee-aware, Poisson-style card-count forecasts for home, away, and match totals. It selects between referee and team-only variants using validation; when referee history is unavailable, it uses the team-only model.
+- The card inputs are reconstructed from Transfermarkt events and lineups by game ID. Active-player lineups are inferred from starters and substitutions; incomplete or ambiguous records are excluded. The feed records 90th-minute events at minute 90, so stoppage time cannot always be distinguished from the final whistle. These labels have not been reconciled with actual bookmaker settlements. [Superbet settlement rules](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-7)
 - Obtain dated, match-level UEFA corner counts and first-half results for multiple seasons before fitting those models. The current Open Matchday European files lack those fields.
-- Match Transfermarkt card events and lineups by game ID. Reconstruct active players from starters and substitutions. Count an eligible yellow as one and a dismissal as two, including a dismissal that follows a second yellow. Exclude matches with incomplete or ambiguous lineup or card records. The feed records 90th-minute events at minute 90, so it cannot consistently distinguish stoppage time from the final whistle. These are reconstructed labels and have not been reconciled with actual bookmaker settlements. [Superbet settlement rules](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-7)
-- Fit separate Poisson models for home, away and match card totals in each competition. Compare the team-only and referee variants on identical fixtures using the mean Brier score over lines 0.5–9.5. Use an appointment known by snapshot time and require at least three prior reconstructed matches for the referee. Use the team model when the referee variant fails validation or history is missing. Use odds from the matching open card market, with a matching promotion when available.
-- Build separate player total-shot targets from appearances and timestamps before scoring that market. Check settlement for participation and separate quote-only markets from model output using the same dashboard table.
-- The original domestic dashboard uses its existing trained models. Migrate domestic models to the shared features only after retraining and checking chronological metrics for those markets.
+- Player total-shot models remain in the sporting code and terminal report, but the dashboard's Player shots tab has been removed. Participation and settlement still need to be modeled before using those estimates as value signals.
+- Domestic models still use their existing trained features. Migrate them to shared cross-competition features only after retraining and checking chronological metrics for those markets.
 
 ## Reproduce
 

@@ -79,7 +79,7 @@ uv run python -m football_odds_predictor.data.superbet_watch --list
 uv run python -m football_odds_predictor.data.superbet_watch
 ```
 
-The watcher discovers fixtures and attempts a capture about 15 minutes before kickoff. On success it prints `Saved … markets and … simple promotions to data/raw/superbet/<event-id>.json`. The accepted window is 10–20 minutes before kickoff. Stop the watcher with **Ctrl+C**.
+The watcher discovers fixtures in Premier League, Bundesliga, La Liga, Champions League, and Europa League. It refreshes the schedule hourly and attempts a capture about 15 minutes before kickoff. On success it prints `Saved … markets and … simple promotions to data/raw/superbet/<event-id>.json`. The accepted window is 10–20 minutes before kickoff. Stop the watcher with **Ctrl+C**. The 26 domestic leagues used for European team-history coverage are a separate historical-data scope; the live odds watcher does not currently cover all of them.
 
 ### Referee inputs
 
@@ -125,7 +125,9 @@ Start the dashboard from the project folder:
 uv run python -m football_odds_predictor.evaluation.dashboard
 ```
 
-Open [the local dashboard](http://127.0.0.1:8765). Choose a match and a market tab, or use the player filter in Player shots. New captures appear in the match list automatically while the watcher runs separately. Restart the dashboard after regenerating the model file or updating the historical results.
+Open [the local dashboard](http://127.0.0.1:8765). It automatically lists today's upcoming fixtures from the Superbet schedule and combines them with local captures for today. The schedule refreshes every two minutes and the page refreshes its list every 30 seconds. The first fixture is selected automatically; click another fixture to open its report. A fixture without a saved price capture stays listed as pending. The displayed day uses Amsterdam time, while kickoff times are formatted in your browser's local time. The schedule endpoint lists upcoming fixtures, so already-started matches appear only when a local capture exists.
+
+The dashboard has tabs for 1X2, goals, cards, and corners. Player shots are not shown there; they remain available in the sporting experiments and optional terminal report. The sensitivity selector applies an optional absolute probability reduction (for example, 5 percentage points means 60% becomes 55%). The color signal is intentionally blank with no adjustment; it is provisional under a chosen adjustment and has not been validated as a betting strategy. The watcher must run separately for new odds to be captured. Restart the dashboard after regenerating model files or updating historical results.
 
 ### Optional terminal report
 
@@ -137,7 +139,7 @@ uv run python -m football_odds_predictor.evaluation.superbet_report
 
 This opens the most recently saved capture. To choose a match, pass its JSON path. Add `--market 1x2`, `--market goals`, `--market cards`, `--market corners`, or `--market shots` to filter the output. Repeat `--market` for multiple sections. Use `--player "Dewsbury-Hall"` for a player name filter.
 
-The output starts with kickoff and capture time, then groups selections by market. For example, the Brentford–Everton probe with `--stress-pp 5` included:
+The output starts with kickoff and capture time, then groups selections by market. Player shots are still supported in this terminal report, even though the dashboard tab is hidden. For example, the Brentford–Everton probe with `--stress-pp 5` included:
 
 ```text
 [Match goals (2.5)]

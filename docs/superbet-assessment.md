@@ -32,7 +32,7 @@ The ordinary shot events match the reported appearance shot counts for fixtures 
 ## Build and validate
 
 1. Build sporting datasets for all listed markets. Use chronological folds, fit preprocessing on training data, and retain a later test window. Start with simple probability and count baselines, then compare candidate models using log loss, Brier score, and calibration by market. For team and player counts, estimate probabilities for the exact offered thresholds. For players, account for likely minutes and the settlement rule if they do not play or start.
-2. Capture one pre-match snapshot per selected fixture. Target 15 minutes before kickoff and accept captures 10–20 minutes before kickoff. Record the actual observation time, scheduled kickoff, fixture and player IDs, market, period, threshold, selection, decimal odds, and settlement rule. Report missing markets for that snapshot. Check a candidate feed on one real fixture before integrating it. Superbet's published clause 3.3.4 restricts direct scraping. [Odds-API.io advertises Superbet coverage](https://odds-api.io/integrations/superbet), but free access, player-market coverage, and exact Romanian prices are unverified. A genuine pre-match quote entered manually can exercise the workflow while automatic access is being verified. [Superbet terms](https://superbet.ro/wiki/termeni-si-conditii) · [Superbet market definitions](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-5)
+2. The current collector reads Superbet's public Romanian offer endpoint. It targets a capture 15 minutes before kickoff and accepts captures 10–20 minutes before kickoff. Each successful snapshot keeps its observation time, fixture, raw markets, and supported single-selection promotions. Untimed public probes have been saved for development; a real timed capture from the running watcher still needs verification. Market settlement rules must be checked before treating a quoted market as the model target. [Superbet market definitions](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-5)
 3. Join predictions with exact matching offers and report fair odds, break-even probability, estimated downside, and signal color. Record the prediction and quote before kickoff. Replay timestamped offers with a simulated budget to measure returns and drawdown by color. Use future fixtures to check whether the color thresholds generalize.
 
 ### Virtual portfolio evaluation
@@ -63,7 +63,7 @@ The evaluator uses supplied outcomes. Automatic settlement, sufficient historica
 
 A single unauthenticated GET to the Romanian site's public offer service returned 443 markets for Arsenal–Borussia Dortmund, event 14790413, kickoff 24 November 2026 at 20:00 UTC. The response included 1X2, totals for goals in the match and in each half, match and team corners, and 217 selections in the total player shots market. For example, the player-shot records include player ID, name, threshold, and price. Card markets were labeled total cards. Verify their settlement rules before mapping them to yellow-card targets. [Superbet public football offer](https://superbet.ro/pariuri-sportive/fotbal)
 
-Start the collector once. It discovers Premier League, Bundesliga, and La Liga fixtures from the public schedule, refreshes that schedule hourly, and attempts one detailed offer capture per fixture at kickoff minus 15 minutes. If it starts late, it can still capture within the 10–20 minute window. The collector must remain running. Failures appear in the terminal. It saves the observation time and one raw offer to `data/raw/superbet/<event-id>.json` and keeps existing snapshots. Pass `--list` to preview scheduled captures in UTC.
+Start the collector once. It discovers Premier League, Bundesliga, La Liga, Champions League, and Europa League fixtures from the public schedule, refreshes that schedule hourly, and attempts one detailed offer capture per fixture at kickoff minus 15 minutes. If it starts late, it can still capture within the 10–20 minute window. The collector must remain running. Failures appear in the terminal. It saves the observation time and one raw offer to `data/raw/superbet/<event-id>.json` and keeps existing snapshots. Pass `--list` to preview upcoming capture times in UTC. This live odds scope is five competitions; the 26 domestic leagues in the European history archive provide team context and are not all collected by the watcher.
 
 ```bash
 uv run python -m football_odds_predictor.data.superbet_watch
@@ -118,7 +118,7 @@ The report reads the saved models and recreates Elo and form using earlier match
 uv run python -m football_odds_predictor.evaluation.superbet_report
 ```
 
-The command opens the most recently saved capture in `data/raw/superbet/`. Pass a path to choose another capture. Options `--market 1x2`, `--market goals`, `--market cards`, `--market corners`, and `--market shots` filter sections. Use `--player 'Dewsbury-Hall'` to see one player's selections. Add `--stress-pp 5` to see provisional colors on comparable team offers using a five-percentage-point reduction in probability. The default leaves colors unset until there is calibration evidence.
+The command opens the most recently saved capture in `data/raw/superbet/`. Pass a path to choose another capture. Options `--market 1x2`, `--market goals`, `--market cards`, `--market corners`, and `--market shots` filter sections. Use `--player 'Dewsbury-Hall'` to see one player's selections. Add `--stress-pp 5` to see provisional colors on comparable team offers using a five-percentage-point reduction in probability. Without a sensitivity setting, colors are unset; the sensitivity amount is not yet estimated from market-specific calibration data.
 
 The team sections need the original training files, the 2020/21 Elo warm-up files, and 2026/27 results in `data/raw/football-data-2627/`. Team names must match the archive. The player section uses the xGTables archive and shows model odds conditional on playing, alongside available prices. It leaves value and colors unset until participation and settlement are modeled. The yellow-card section shows model odds. Superbet's total-cards prices remain separate pending rule mapping. Supported lines are the fixed thresholds evaluated below.
 
@@ -129,7 +129,19 @@ uv run python -m football_odds_predictor.evaluation.superbet_report \
   data/raw/superbet-probes/14656294.json --probe --stress-pp 5
 ```
 
-The report runs independently of the watcher. Automatic reporting and fresh player results remain open. The evaluation below measures probability calibration. The report's optional color still uses a user-supplied sensitivity scenario.
+The report runs independently of the watcher. Fresh player results remain open. The evaluation below measures probability calibration. The report's optional color still uses a user-supplied sensitivity scenario.
+
+### Local dashboard
+
+Start the dashboard after fitting the sporting models:
+
+```bash
+uv run python -m football_odds_predictor.evaluation.dashboard
+```
+
+The dashboard requests the upcoming public Superbet schedule, filters it to the current day in Europe/Amsterdam, and merges it with local captures for that day. It refreshes the live schedule every two minutes and the browser's fixture list every 30 seconds. The first fixture is selected automatically; click a listed fixture to open its report. A listed fixture without a timed offer shows that its capture is pending. The schedule feed only lists upcoming matches, so a match that has started appears only if a local capture exists. If the schedule request fails, the page can still show saved captures and reports the schedule error.
+
+The dashboard displays 1X2, goals, cards, and corners. Player shots remain in the model and optional terminal report, but the dashboard tab and player filter have been removed. Color signals are deliberately absent under “No sensitivity adjustment”; choosing a five- or ten-percentage-point reduction lowers the predicted win probability by that many absolute points (for example, 60% to 55%) and calculates a provisional conservative return. These colors are not validated betting recommendations.
 
 ## First sporting model comparison
 
