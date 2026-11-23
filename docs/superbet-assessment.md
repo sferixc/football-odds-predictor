@@ -35,13 +35,29 @@ The ordinary shot events match the reported appearance shot counts for fixtures 
 2. Capture one pre-match snapshot per selected fixture. Target 15 minutes before kickoff and accept captures 10–20 minutes before kickoff. Record the actual observation time, scheduled kickoff, fixture and player IDs, market, period, threshold, selection, decimal odds, and settlement rule. Report missing markets for that snapshot. Check a candidate feed on one real fixture before integrating it. Superbet's published clause 3.3.4 restricts direct scraping. [Odds-API.io advertises Superbet coverage](https://odds-api.io/integrations/superbet), but free access, player-market coverage, and exact Romanian prices are unverified. A genuine pre-match quote entered manually can exercise the workflow while automatic access is being verified. [Superbet terms](https://superbet.ro/wiki/termeni-si-conditii) · [Superbet market definitions](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-5)
 3. Join predictions with exact matching offers and report fair odds, break-even probability, estimated downside, and signal color. Record the prediction and quote before kickoff. Replay timestamped offers with a simulated budget to measure returns and drawdown by color. Use future fixtures to check whether the color thresholds generalize.
 
-### Optional future experiment
+### Virtual portfolio evaluation
 
-The following describes a possible virtual-budget simulation. Its design is open.
+**Question.** How would a set of simulated selections affect a fixed budget as results arrive? The offline evaluator replays a supplied CSV by placement and settlement time. It reserves each stake until settlement, credits `stake × odds` on a win, refunds a void, and credits zero on a loss. It rejects placements that would exceed available funds.
 
-Record each simulated selection before kickoff with its fixture, market, threshold, captured price, model probability, model version, signal color, and simulated stake. Track user selections and any preset selection rule so each can be evaluated on its own. Score each selection using the applicable settlement rule, including full refunds when an offer is void.
+Use ISO timestamps with explicit UTC offsets. Leave both `settled_at` and `outcome` blank for open positions. Outcomes are `win`, `loss`, or `void`. Record placements and price before the match, then fill in the outcome under the applicable settlement rule. Use a separate ledger for each selection strategy when comparing strategies. Store market, threshold, probabilities, model version, and quote ID alongside the ledger when they are available.
 
-Start with a virtual budget and a fixed one-unit stake. Report the number of settled selections, total staked, net result, return on stake, and maximum drawdown overall and by color. Group selections from the same match when measuring uncertainty. Select any color thresholds on earlier captures and evaluate them on later ones with the rules frozen.
+**Worked example.** Save the following fictional ledger as `/tmp/football-portfolio-example.csv` and run the command below.
+
+```csv
+bet_id,fixture_id,selection,placed_at,kickoff,settled_at,stake,odds,outcome,signal
+b1,f1,Home win,2026-08-01T12:45:00Z,2026-08-01T13:00:00Z,2026-08-01T15:00:00Z,20,1.90,loss,green
+b2,f2,Over 2.5 goals,2026-08-01T13:45:00Z,2026-08-01T14:00:00Z,2026-08-01T16:00:00Z,25,2.00,win,purple
+b3,f3,Over 1.5 player shots,2026-08-02T12:45:00Z,2026-08-02T13:00:00Z,2026-08-02T15:00:00Z,10,1.90,void,orange
+b4,f4,Under 9.5 corners,2026-08-03T12:45:00Z,2026-08-03T13:00:00Z,,5,1.90,,yellow
+```
+
+```bash
+uv run python -m football_odds_predictor.evaluation.portfolio /tmp/football-portfolio-example.csv --budget 100
+```
+
+The final equity is **105 units**, including **5 units** in the open bet. The three settled bets give **+5 units** on **55 units staked** for **+9.09% ROI**. The largest drop from an earlier equity peak is **20%**, and at most **45 units** were tied up at once. Drawdown uses available cash plus open stakes valued at cost. ROI includes refunded stakes in the turnover and excludes open stakes. The report breaks down settled outcomes, stakes, net results, and ROI by color.
+
+The evaluator uses supplied outcomes. Automatic settlement, sufficient historical Superbet captures, and validation of color thresholds remain open. For that validation, compare colors at a fixed one-unit stake, group selections from the same fixture when measuring uncertainty, and test the chosen thresholds on later captures.
 
 ### Superbet snapshot pilot
 
