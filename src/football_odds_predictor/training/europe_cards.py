@@ -9,10 +9,9 @@ from sklearn.preprocessing import StandardScaler
 
 from ..data.europe import INPUTS
 from ..data.europe_cards import CARD_EVENTS, CARD_LINEUPS, SCOPES, card_targets
-from ..models.ucl import referee_key
+from ..models.ucl import MIN_REFEREE_MATCHES, referee_key
 
 LINES = np.arange(0.5, 10, 1)
-MIN_REF_MATCHES = 3
 
 
 def fit_europe_cards(games, inputs):
@@ -23,7 +22,7 @@ def fit_europe_cards(games, inputs):
     rows["official"] = rows["referee"].map(referee_key)
     days = rows.groupby(["official", "date"])["match"].agg(["sum", "count"])
     prior = days.groupby(level="official").cumsum() - days
-    prior_mean = prior["sum"] / prior["count"].where(prior["count"].ge(MIN_REF_MATCHES))
+    prior_mean = prior["sum"] / prior["count"].where(prior["count"].ge(MIN_REFEREE_MATCHES))
     rows = rows.join(prior_mean.rename("referee_mean"), on=["official", "date"])
     referee_history = {
         official: list(zip(group.index.get_level_values("date").date,

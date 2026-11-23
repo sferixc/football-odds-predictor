@@ -11,6 +11,7 @@ from scipy.stats import poisson
 from ..data.europe import pre_match_inputs
 
 UCL_MODELS = Path("data/processed/ucl-models.pkl")
+MIN_REFEREE_MATCHES = 3
 
 
 def club_key(name: str) -> str:
@@ -58,7 +59,7 @@ def predict_ucl(bundle, fixture, kickoff, competition="CL", referee=None):
     ref_index = bisect_left(referee_history, kickoff.date(), key=lambda row: row[0])
     prior = referee_history[ref_index - 1] if ref_index else None
     for scope, variants in models.get("cards", {}).items():
-        use_referee = bool(variants["use_referee"] and prior and prior[2] >= 3)
+        use_referee = bool("referee" in variants and prior and prior[2] >= MIN_REFEREE_MATCHES)
         if use_referee:
             expected = variants["referee"].predict([[*x[0], prior[1] / prior[2]]])[0]
         else:
