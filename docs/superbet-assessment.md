@@ -76,4 +76,36 @@ uv run python -m football_odds_predictor.evaluation.offer --odds 1.90 \
   --win-probability 0.60 --conservative-win-probability 0.55 --stake 2 --budget 100
 ```
 
-The prototype currently scores supplied inputs. The probability models and the link between the snapshot and the report are pending.
+The prototype currently scores supplied inputs. The first probability models are evaluated below. Saving selected models and linking their predictions to captured offers are pending.
+
+## First sporting model comparison
+
+**Question.** Can sporting data improve probability estimates over the historical frequency for each selection? Run:
+
+```bash
+uv run python -m football_odds_predictor.training.sporting
+```
+
+Use Football-Data.co.uk outcomes from 2021/22–2025/26, the Elo columns from dataset `01551de`, and the xGTables Understat player appearances described above. Team inputs are pre-match Elo and five prior league matches of goals, goals by half, yellows, corners, and fouls for and against. Referee assignments are pending a pre-match availability source. Player inputs are venue and the mean shots and minutes over five earlier appearances in the same league. The player evaluation covers positive-minute appearances for players averaging at least 45 minutes over those prior appearances. Its probabilities are conditional on playing. Current-match minutes and results are excluded from model inputs. Earlier fixture dates serve as the availability approximation.
+
+Compare historical frequency, standardized logistic regression, epoch-trained SGD, and XGBoost (150 trees, depth 2, learning rate 0.05). Reuse the three expanding validation folds ending in 2022/23, 2023/24, and 2024/25. For SGD, use the last fifth of dates in each training fold to choose the best epoch by log loss, up to 30 epochs with patience 5. Refit on the full training fold for that many epochs. Fit scaling inside each training window. SGD uses averaged weights, a constant learning rate of 0.01, and alpha 0.001. SGD and XGBoost use seed 42. The command prints validation log loss and Brier score. The 2025/26 holdout was not scored for these targets.
+
+**Worked example.** In the first fold, logistic regression gave Arsenal–Chelsea probabilities of **62.16% / 20.18% / 17.66%** for home win, draw, and away win. The model saw Arsenal's initial Elo and its mean of 2.4 goals in the prior five matches. The eventual result is used as the training or evaluation label for the applicable fold.
+
+| Selection | Frequency log loss | Best candidate | Candidate log loss |
+| --- | ---: | --- | ---: |
+| 1X2 | 1.0686 | SGD | 0.9980 |
+| Match goals > 2.5 | 0.6887 | SGD | 0.6803 |
+| First-half goals > 0.5 | 0.5808 | Frequency | 0.5808 |
+| Second-half goals > 1.5 | 0.6938 | SGD | 0.6911 |
+| Home yellows > 2.5 | 0.6390 | SGD | 0.6305 |
+| Away yellows > 2.5 | 0.6712 | SGD | 0.6672 |
+| Match yellows > 4.5 | 0.6848 | SGD | 0.6732 |
+| Home corners > 4.5 | 0.6806 | Logistic | 0.6490 |
+| Away corners > 4.5 | 0.6788 | XGBoost | 0.6514 |
+| Match corners > 9.5 | 0.6924 | SGD | 0.6915 |
+| Player shots > 0.5 | 0.6918 | XGBoost | 0.5849 |
+| Player shots > 1.5 | 0.5341 | XGBoost | 0.4415 |
+| Player shots > 2.5 | 0.3328 | XGBoost | 0.2679 |
+
+Values are equal-weight means across the three validation seasons. The biggest improvements are for player shots and 1X2. Some goals and match-corner selections are close to the frequency baseline. This experiment evaluates fixed thresholds and does not establish calibration for the full set of Superbet offers. Check reliability by probability band and score the held-out season before interpreting offer colors.
