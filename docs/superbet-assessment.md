@@ -129,7 +129,7 @@ uv run python -m football_odds_predictor.evaluation.superbet_report \
   data/raw/superbet-probes/14656294.json --probe --stress-pp 5
 ```
 
-The report runs independently of the watcher. Automatic reporting, fresh player results, and calibration remain open. Calibration asks whether comparable predictions near 60% actually occur about 60% of the time. Assess it by probability band on out-of-sample data. The final test scores the frozen sporting models on 2025/26 after selecting the evaluation and calibration procedures.
+The report runs independently of the watcher. Automatic reporting and fresh player results remain open. The evaluation below measures probability calibration. The report's optional color still uses a user-supplied sensitivity scenario.
 
 ## First sporting model comparison
 
@@ -161,4 +161,29 @@ Compare historical frequency, standardized logistic regression, epoch-trained SG
 | Player shots > 1.5 | 0.5341 | XGBoost | 0.4415 |
 | Player shots > 2.5 | 0.3328 | XGBoost | 0.2679 |
 
-Values are equal-weight means across the three validation seasons. The biggest improvements are for player shots and 1X2. Some goals and match-corner selections are close to the frequency baseline. This experiment evaluates fixed thresholds and does not establish calibration for the full set of Superbet offers. Check reliability by probability band and score the held-out season before interpreting offer colors.
+Values are equal-weight means across the three validation seasons. The biggest improvements are for player shots and 1X2. Some goals and match-corner selections are close to the frequency baseline. The comparison applies to the fixed thresholds listed above.
+
+## Calibration check and final sporting test
+
+**Question.** Do the probabilities correspond to observed frequencies, and how well do the selected models predict 2025/26?
+
+```bash
+uv run python -m football_odds_predictor.evaluation.sporting validation
+uv run python -m football_odds_predictor.evaluation.sporting test
+```
+
+Use the same team and player data as the validation comparison. The first command pools predictions from the three validation folds. The second loads the 13 saved models fitted on 2021/22–2024/25 and scores 2025/26. The models and probability outputs were kept fixed for this test. Metrics pool eligible rows, so the validation log loss can differ slightly from the equal-weight fold means above.
+
+The commands write `data/processed/sporting-reliability-validation.csv` and `sporting-reliability-test.csv` in the same folder. Each row shows the sample count, mean predicted probability, and realized frequency in one 10-percentage-point band. The calibration gap averages the absolute differences across occupied bands, weighted by their sample counts. For 1X2 it includes all three outcomes. For binary selections it uses the over probability.
+
+**Worked example.** In the 2025/26 test, 489 fixtures had an estimate between 50% and 60% for over 2.5 goals. Their mean prediction was **54.9%** and **55.8%** actually went over.
+
+| Selection | Test rows | Test log loss | Validation calibration gap | Test calibration gap |
+| --- | ---: | ---: | ---: | ---: |
+| 1X2 | 1,051 | 1.0001 | 2.1 pp | 2.7 pp |
+| Match goals > 2.5 | 1,051 | 0.6803 | 2.6 pp | 1.9 pp |
+| Home yellows > 2.5 | 1,051 | 0.6003 | 3.4 pp | 5.2 pp |
+| Home corners > 4.5 | 1,051 | 0.6547 | 2.3 pp | 4.3 pp |
+| Player shots > 1.5, conditional on playing | 23,952 | 0.4442 | 0.9 pp | 0.6 pp |
+
+These gaps describe groups of predictions, with sample counts in the CSVs. They are insufficient to set a conservative probability for an individual selection. Validating the color signals still requires matching actual Superbet offers and settlement rules. Player results do not cover the chance of a player appearing.

@@ -51,7 +51,7 @@ uv run python -m football_odds_predictor.evaluation.final_test
 uv run python -m football_odds_predictor.training.sporting
 ```
 
-The first two commands print Bet365 odds errors for validation and the final test. The sporting command prints log loss and Brier scores, with 2025/26 reserved for its final test. To reproduce the Bet365 replay on recent fixtures, run `uv run python -m football_odds_predictor.evaluation.recent` with the recent and warm-up folders populated.
+The first two commands print Bet365 odds errors for validation and the final test. The sporting command prints validation log loss and Brier scores. To reproduce the Bet365 replay on recent fixtures, run `uv run python -m football_odds_predictor.evaluation.recent` with the recent and warm-up folders populated.
 
 To prepare the terminal report, fit the selected sporting models once:
 
@@ -60,6 +60,15 @@ uv run python -m football_odds_predictor.training.fit_sporting
 ```
 
 Expect `Saved 13 trained models to data/processed/sporting-models.pkl`. Every contributor generates this file locally. The report loads it on each run. Refit when the training data or model settings change. Load only a model file you generated yourself.
+
+To reproduce the [sporting calibration and final test](docs/superbet-assessment.md#calibration-check-and-final-sporting-test), run:
+
+```bash
+uv run python -m football_odds_predictor.evaluation.sporting validation
+uv run python -m football_odds_predictor.evaluation.sporting test
+```
+
+The terminal prints log loss, Brier score, and the calibration gap for each selection. The detailed probability bands are saved in `data/processed/sporting-reliability-{validation,test}.csv`.
 
 ## 4. Capture an offer
 

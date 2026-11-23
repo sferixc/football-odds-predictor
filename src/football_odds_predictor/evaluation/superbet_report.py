@@ -1,7 +1,6 @@
 """Report supported football selections alongside one captured Superbet offer."""
 
 import argparse
-from datetime import date
 from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
@@ -19,6 +18,7 @@ from ..data.sporting import (
     read_player_appearances, read_team_matches, team_features,
 )
 from ..data.superbet_snapshot import check_window, open_price, simple_promotions, utc_timestamp
+from ..models.sporting import predict_saved as predict_saved
 from ..training.fit_sporting import DEFAULT_MODELS, PLAYER_LINES
 from ..training.sporting import TEAM_THRESHOLDS
 from .offer import assess_offer
@@ -98,19 +98,6 @@ def team_inputs_for_event(event: dict) -> tuple[pd.DataFrame, list[pd.Timestamp]
         raise ValueError("The fixture is missing complete five-match inputs")
 
     return current, last_matches
-
-
-def predict_saved(
-    models: dict, current: pd.DataFrame, target: str, cutoff: date, threshold: float | None = None,
-) -> np.ndarray:
-    """Run the saved classifier using its recorded input column order."""
-    model = models[(target, threshold)]
-    if model["training_end"] >= cutoff:
-        raise ValueError("The fixture date must follow the fitted model's training period")
-    inputs = current[model["inputs"]].to_numpy()
-    if model["frequency"] is not None:
-        return np.broadcast_to(model["frequency"], (len(current), len(model["frequency"])))
-    return model["estimator"].predict_proba(inputs)
 
 
 def line_selection(name: str, specifiers: dict, threshold: float) -> str | None:
