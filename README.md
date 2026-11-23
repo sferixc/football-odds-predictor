@@ -18,14 +18,34 @@ The [Bet365 experiment notes](docs/project-plan.md) describe the first research 
 
 ## Getting started
 
-Use the [contributor guide](CONTRIBUTING.md) to install dependencies, download raw inputs, train models locally, and open the dashboard or run a terminal report. The clone includes `data/processed/matches.csv` and `data/processed/features.csv` for the Bet365 experiment. Raw archives, Superbet snapshots, and fitted model files stay local and must be downloaded or generated separately.
+Use the [contributor guide](CONTRIBUTING.md) for the one-time data setup. The clone includes `data/processed/matches.csv` and `data/processed/features.csv` for the Bet365 experiment. Raw archives, Superbet snapshots, and fitted model files stay local and must be downloaded or generated separately.
 
-Start the local dashboard from the project folder after fitting the models:
+## Full daily workflow
+
+Fit the models once after downloading the inputs. Repeat these commands only when the data or model settings change. See the contributor guide for the required files for each model:
+
+```bash
+uv run python -m football_odds_predictor.training.fit_sporting
+uv run python -m football_odds_predictor.training.fit_cards
+uv run python -m football_odds_predictor.training.fit_ucl
+```
+
+Then keep these two commands running in separate terminals:
+
+**Terminal 1 — collect Superbet odds**
+
+```bash
+uv run python -m football_odds_predictor.data.superbet_watch
+```
+
+**Terminal 2 — view the dashboard**
 
 ```bash
 uv run python -m football_odds_predictor.evaluation.dashboard
 ```
 
-Open [the dashboard](http://127.0.0.1:8765). It loads today's upcoming fixtures from the Superbet schedule, combines them with today's local captures, and refreshes the page's list automatically. Select a fixture to open its report; if odds have not been captured yet, the report waits for the scheduled capture. The page shows 1X2, goals, cards, and corners. Player shots remain available in the research and terminal report, but are hidden from the dashboard. Keep this command running while you use the page; the separate watcher must also run to collect new odds.
+Open [the dashboard](http://127.0.0.1:8765). It lists today's upcoming fixtures and selects the first one automatically. The dashboard refreshes its fixture list every 30 seconds and the public schedule every two minutes. The watcher refreshes its schedule hourly and attempts one odds capture per fixture, about 15 minutes before kickoff (accepted window: 10–20 minutes). It does not continuously refresh a captured quote. Both terminals must stay open. Stop either process with `Ctrl+C`.
+
+The dashboard shows 1X2, goals, cards, and corners. Player shots remain available in the research and terminal report, but are hidden from the dashboard. The sensitivity options reduce the model's estimated probability by 5 or 10 percentage points to calculate provisional colors; with no sensitivity adjustment, colors are blank.
 
 European team history uses a shared club Elo and recent results from Transfermarkt, Open Matchday, and OpenFootball. The current coverage audit spans 26 domestic leagues to help form estimates for European fixtures; it does not mean that Superbet odds are currently collected for all 26 leagues. See the [European model notes](docs/european-model-plan.md).

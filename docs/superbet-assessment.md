@@ -133,13 +133,29 @@ The report runs independently of the watcher. Fresh player results remain open. 
 
 ### Local dashboard
 
-Start the dashboard after fitting the sporting models:
+Fit the saved models after downloading or updating their inputs. The sporting bundle is required; domestic and European card bundles add their respective reports:
+
+```bash
+uv run python -m football_odds_predictor.training.fit_sporting
+uv run python -m football_odds_predictor.training.fit_cards
+uv run python -m football_odds_predictor.training.fit_ucl
+```
+
+These models are loaded when the dashboard starts. Do not refit for each match lookup. After fitting, use two terminals:
+
+**Terminal 1 — keep the odds watcher running**
+
+```bash
+uv run python -m football_odds_predictor.data.superbet_watch
+```
+
+**Terminal 2 — keep the dashboard running**
 
 ```bash
 uv run python -m football_odds_predictor.evaluation.dashboard
 ```
 
-The dashboard requests the upcoming public Superbet schedule, filters it to the current day in Europe/Amsterdam, and merges it with local captures for that day. It refreshes the live schedule every two minutes and the browser's fixture list every 30 seconds. The first fixture is selected automatically; click a listed fixture to open its report. A listed fixture without a timed offer shows that its capture is pending. The schedule feed only lists upcoming matches, so a match that has started appears only if a local capture exists. If the schedule request fails, the page can still show saved captures and reports the schedule error.
+The dashboard requests the upcoming public Superbet schedule, filters it to the current day in Europe/Amsterdam, and merges it with local captures for that day. It refreshes the live schedule every two minutes and the browser's fixture list every 30 seconds. The watcher refreshes its schedule hourly and attempts one odds capture per fixture about 15 minutes before kickoff (10–20 minutes before kickoff is accepted); it does not continuously refresh captured prices. The first fixture is selected automatically; click a listed fixture to open its report. A listed fixture without a timed offer shows that its capture is pending. The schedule feed only lists upcoming matches, so a match that has started appears only if a local capture exists. If the schedule request fails, the page can still show saved captures and reports the schedule error. Keep both terminals open and stop each process with Ctrl+C.
 
 The dashboard displays 1X2, goals, cards, and corners. Player shots remain in the model and optional terminal report, but the dashboard tab and player filter have been removed. Color signals are deliberately absent under “No sensitivity adjustment”; choosing a five- or ten-percentage-point reduction lowers the predicted win probability by that many absolute points (for example, 60% to 55%) and calculates a provisional conservative return. These colors are not validated betting recommendations.
 

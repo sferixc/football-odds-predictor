@@ -61,6 +61,8 @@ uv run python -m football_odds_predictor.training.fit_sporting
 
 Expect `Saved 13 trained models to data/processed/sporting-models.pkl`. Every contributor generates this file locally. The dashboard loads it at startup. Refit when the training data or model settings change. Load only a model file you generated yourself.
 
+The dashboard can also load two optional, locally generated bundles: `fit_cards` adds domestic count-based card forecasts, and `fit_ucl` adds Champions League and Europa League forecasts, including referee-aware European card models. Their extra input files are listed in the following sections. Run each fit command after downloading those inputs; you do not need to retrain models for every dashboard query.
+
 To reproduce the [sporting calibration and final test](docs/superbet-assessment.md#calibration-check-and-final-sporting-test), run:
 
 ```bash
@@ -117,15 +119,25 @@ card totals in both competitions. European card forecasts require the two
 Transfermarkt event and lineup files. See the
 [European model plan](docs/european-model-plan.md) for coverage and evaluation.
 
-## 5. Browse match reports
+## 5. Run the daily workflow and browse reports
 
-Start the dashboard from the project folder:
+After setup and model fitting, open two terminals in the project folder and leave both commands running:
+
+**Terminal 1 — collect odds**
+
+```bash
+uv run python -m football_odds_predictor.data.superbet_watch
+```
+
+**Terminal 2 — open the dashboard**
 
 ```bash
 uv run python -m football_odds_predictor.evaluation.dashboard
 ```
 
-Open [the local dashboard](http://127.0.0.1:8765). It automatically lists today's upcoming fixtures from the Superbet schedule and combines them with local captures for today. The schedule refreshes every two minutes and the page refreshes its list every 30 seconds. The first fixture is selected automatically; click another fixture to open its report. A fixture without a saved price capture stays listed as pending. The displayed day uses Amsterdam time, while kickoff times are formatted in your browser's local time. The schedule endpoint lists upcoming fixtures, so already-started matches appear only when a local capture exists.
+Open [the local dashboard](http://127.0.0.1:8765). It automatically lists today's upcoming fixtures from the Superbet schedule and combines them with local captures for today. The dashboard refreshes the schedule every two minutes; the browser refreshes its fixture list every 30 seconds. The watcher refreshes its schedule hourly and attempts one odds capture per fixture about 15 minutes before kickoff, in the 10–20 minute window. It does not keep updating a quote after that capture. The first fixture is selected automatically; click another fixture to open its report. A fixture without a saved price capture stays listed as pending. The displayed day uses Amsterdam time, while kickoff times are formatted in your browser's local time. The schedule endpoint lists upcoming fixtures, so already-started matches appear only when a local capture exists.
+
+Keep both terminals open: the dashboard displays the schedule and saved data, while the watcher performs the odds capture. Stop each process with **Ctrl+C**. The watcher covers five competitions; the 26 domestic leagues in the European history archive are not all live-odds competitions.
 
 The dashboard has tabs for 1X2, goals, cards, and corners. Player shots are not shown there; they remain available in the sporting experiments and optional terminal report. The sensitivity selector applies an optional absolute probability reduction (for example, 5 percentage points means 60% becomes 55%). The color signal is intentionally blank with no adjustment; it is provisional under a chosen adjustment and has not been validated as a betting strategy. The watcher must run separately for new odds to be captured. Restart the dashboard after regenerating model files or updating historical results.
 
