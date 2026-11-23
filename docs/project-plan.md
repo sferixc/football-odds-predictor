@@ -75,3 +75,20 @@ Run `uv run python -m football_odds_predictor.baseline --model ridge` on dataset
 | Fold mean | 0.3396 | **0.1617** | **0.6585** |
 
 Ridge cut mean log-odds MAE by about 52% and improved every validation season. It is the current reference for XGBoost and LSTM. The 2025/26 test season remains reserved.
+
+## XGBoost
+
+**Question.** Do decision trees using the five matches individually improve on Ridge with averages?
+
+Run `uv run python -m football_odds_predictor.baseline --model xgboost` on dataset `01551de`. Each fixture has two current Elo ratings and 100 historical values. Fit a separate model for each of the three log closing odds. Each model uses 200 trees, maximum depth 3, learning rate 0.05, and seed 42. Convert predictions back to decimal odds with a floor of 1.01.
+
+**Worked example.** For Arsenal–Chelsea, XGBoost sees Arsenal's goals scored as five separate values, `4, 2, 2, 3, 1`. Ridge summarizes them as `2.4`. XGBoost predicted **1.47 / 5.67 / 8.02** against actual odds **1.57 / 4.33 / 5.50**. It missed this particular match by more than Ridge on average across the three odds.
+
+| Validation | Ridge log-odds MAE | XGBoost log-odds MAE | XGBoost decimal-odds MAE |
+| --- | ---: | ---: | ---: |
+| 2022/23 | 0.1644 | 0.1559 | 0.6389 |
+| 2023/24 | 0.1657 | 0.1619 | 0.6866 |
+| 2024/25 | 0.1551 | 0.1356 | 0.5801 |
+| Fold mean | 0.1617 | **0.1512** | **0.6352** |
+
+XGBoost improved the primary metric in every fold and lowered its fold mean by about 6.5%. The experiment changes both model and input representation, so it measures their combined effect. The 2025/26 test season remains reserved.
