@@ -224,7 +224,9 @@ __marimo__/
 
 # Datasets
 data/raw/
-data/processed/
+data/processed/*
+!data/processed/matches.csv
+!data/processed/features.csv
 
 # Trained models
 *.pt
