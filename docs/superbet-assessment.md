@@ -47,6 +47,14 @@ uv run python -m football_odds_predictor.data.superbet_watch
 
 The network probe was outside the target window. The capture-window checks were verified locally with the real response, and an actual timed capture remains to be verified. OddsPapi separately documents historical snapshots for `superbet.ro`. Verify access under the available account and match the historical observation time to the same pre-match window before using them for a replay. [OddsPapi historical example](https://oddspapi.io/blog/superbet-api-odds-access/#step-4-check-the-closing-line-on-played-fixtures)
 
+### SuperCote and boosted combinations
+
+The raw capture already preserves single-selection SuperCote under `markets`, combinations under `superbets`, and price boosts under `priceboosts`. In the Brentford–Everton probe, Superbet listed a boosted combination of at least nine match shots on target, three match goals, and ten match corners. It listed 4.25 as the offered price and 3.75 as the original price. The payload identifies all three legs individually.
+
+New snapshots extract open single-selection promotions into `simple_promotions`. The extractor pairs 1X2 SuperCote with the corresponding standard prices. It also keeps single-leg boosts on identified goal, corner, player total-shot, and 1X2 markets, with the original price reference if supplied. The Brentford–Everton response yielded three simple entries, one per 1X2 outcome. Its boosted combinations stayed in the raw response.
+
+Display combinations separately when we add a report view for them. Scoring a same-match combination requires a validated joint probability that accounts for dependence and matches the settlement rules. Card promotions remain in the raw data until their market definition can be mapped to the sporting targets.
+
 ## Offer report prototype
 
 The calculator supports one win/loss selection, with an optional full refund. It takes the two probability estimates and the odds as inputs. It reports an expected return per unit staked, expected profit for the chosen stake, chance of loss, and maximum loss as a share of the budget. Partial settlements and combinations are outside this prototype.

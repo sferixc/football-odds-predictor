@@ -3,11 +3,87 @@
 import argparse
 from datetime import UTC, datetime, timedelta
 import json
+import math
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 ENDPOINT = "https://production-superbet-offer-ro.freetls.fastly.net/v3/ro-RO/events"
+SIMPLE_MARKETS = {
+    "547": "1x2",
+    "200734": "match_goals",
+    "200735": "first_half_goals",
+    "200738": "second_half_goals",
+    "704": "match_corners",
+    "713": "home_corners",
+    "733": "away_corners",
+    "236218": "player_total_shots",
+}
+
+
+def open_price(odd: dict) -> bool:
+    """Check the flags and price used for currently selectable outcomes."""
+    price = odd.get("price")
+    return (
+        odd.get("status") == 1
+        and odd.get("display") is True
+        and isinstance(price, (int, float))
+        and math.isfinite(price)
+        and price > 1
+    )
+
+
+def simple_promotions(event: dict) -> list[dict]:
+    """Extract open single selections that map to a supported sporting market."""
+    standard = {}
+    for market in event["markets"]:
+        if market["id"] == 547:
+            standard.update(
+                (odd["metadata"]["name"], odd["price"])
+                for odd in market["odds"] if open_price(odd)
+            )
+
+    promotions = []
+    for market in event["markets"]:
+        if market["id"] != 201013:
+            continue
+        for odd in market["odds"]:
+            selection = odd["metadata"]["name"].removeprefix("SC-")
+            if open_price(odd) and selection in ("1", "X", "2"):
+                promotions.append({
+                    "type": "super_cota",
+                    "market": "1x2",
+                    "selection": selection,
+                    "odds": odd["price"],
+                    "standard_odds": standard.get(selection),
+                    "offer_id": odd["uuid"],
+                })
+
+    for market in event.get("priceboosts", []):
+        for odd in market["odds"]:
+            if not open_price(odd):
+                continue
+            # More than one component needs a joint probability and stays in the raw offer.
+            metadata = odd["metadata"]
+            components = metadata.get("odd_components") or []
+            if len(components) != 1:
+                continue
+            component = components[0]
+            market_name = SIMPLE_MARKETS.get(str(component.get("universal_market_id")))
+            selection = component.get("odd_name")
+            if market_name is None or not selection:
+                continue
+            original = metadata.get("extra", {}).get("originalPrice")
+            promotions.append({
+                "type": "price_boost",
+                "market": market_name,
+                "selection": selection,
+                "specifiers": component.get("specifiers", {}),
+                "odds": odd["price"],
+                "original_price_reference": original,
+                "offer_id": odd["uuid"],
+            })
+    return promotions
 
 
 def utc_timestamp(value: str) -> datetime:
@@ -47,14 +123,20 @@ def capture(event_id: int, kickoff: datetime, output_dir: Path) -> Path:
     observed_at = datetime.now(UTC)
     check_window(kickoff, observed_at)
     event = read_event(payload, event_id, kickoff)
+    promotions = simple_promotions(event)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as handle:
         json.dump(
-            {"observed_at_utc": observed_at.isoformat(), "source": url, "event": event},
+            {
+                "observed_at_utc": observed_at.isoformat(),
+                "source": url,
+                "simple_promotions": promotions,
+                "event": event,
+            },
             handle, ensure_ascii=False, indent=2,
         )
-    print(f"Saved {len(event['markets'])} markets to {output}", flush=True)
+    print(f"Saved {len(event['markets'])} markets and {len(promotions)} simple promotions to {output}", flush=True)
     return output
 
 
