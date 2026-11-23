@@ -81,6 +81,39 @@ uv run python -m football_odds_predictor.data.superbet_watch
 
 The watcher discovers fixtures and attempts a capture about 15 minutes before kickoff. On success it prints `Saved … markets and … simple promotions to data/raw/superbet/<event-id>.json`. The accepted window is 10–20 minutes before kickoff. Stop the watcher with **Ctrl+C**.
 
+### Referee inputs
+
+Football-Data supplies Premier League referees. To add referee variants for
+Bundesliga and La Liga, save the [Transfermarkt games archive](https://github.com/dcaribou/transfermarkt-datasets)
+locally and rebuild the card bundle:
+
+```bash
+mkdir -p data/raw/transfermarkt
+curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/games.csv.gz -o data/raw/transfermarkt/games.csv.gz
+uv run python -m football_odds_predictor.training.fit_cards
+```
+
+If a timed offer omits the assigned referee, the report can read
+`data/raw/referee-appointments.csv` with columns `event_id,referee,observed_at_utc`.
+Use the name as written in the league archive and the UTC timestamp at which
+the assignment was observed. The report uses the most recent assignment
+recorded by the offer timestamp, with a team-only fallback.
+
+The watcher also captures Champions League and Europa League offers. With the
+same Transfermarkt archive, add recent results and rebuild the European models:
+
+```bash
+mkdir -p data/raw/open-matchday data/raw/openfootball
+curl -fL https://codeload.github.com/oladeeayo/open-matchday/zip/refs/heads/master -o data/raw/open-matchday/results-2627.zip
+curl -fL https://openfootball.github.io/europe/slovakia_2023-24_sk1.json -o data/raw/openfootball/slovakia_2023-24_sk1.json
+curl -fL https://openfootball.github.io/europe/slovakia_2024-25_sk1.json -o data/raw/openfootball/slovakia_2024-25_sk1.json
+uv run python -m football_odds_predictor.training.fit_ucl
+```
+
+Restart the dashboard and watcher. The European model covers 1X2 and
+full-match goals in the two competitions. See the
+[European model plan](docs/european-model-plan.md) for coverage and evaluation.
+
 ## 5. Browse match reports
 
 Start the dashboard from the project folder:

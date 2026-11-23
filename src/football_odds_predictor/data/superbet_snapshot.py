@@ -8,6 +8,9 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+UCL_TOURNAMENT = 80794
+UEL_TOURNAMENT = 688
+EUROPEAN_TOURNAMENTS = {UCL_TOURNAMENT: "CL", UEL_TOURNAMENT: "EL"}
 ENDPOINT = "https://production-superbet-offer-ro.freetls.fastly.net/v3/ro-RO/events"
 # Source market IDs mapped to the event names used in the sporting analysis.
 SIMPLE_MARKETS = {

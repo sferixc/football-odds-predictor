@@ -208,15 +208,19 @@ uv run python -m football_odds_predictor.evaluation.referee_cards
 
 ### Expanded yellow-card lines
 
-Fit the Premier League count models with `uv run python -m football_odds_predictor.training.fit_cards`.
+Fit the league-specific count models with `uv run python -m football_odds_predictor.training.fit_cards`.
 This writes `data/processed/yellow-card-models.pkl`. Restart the dashboard to load it.
-Three Poisson count models cover home, away, and match yellow totals. Each has a
-team-only version and a version with the referee's historical mean. A single
+Each of Premier League, Bundesliga, and La Liga has separate Poisson models
+for home, away, and match yellow totals. Each league can fit a variant that
+uses the referee's historical mean. A single
 count distribution per target gives ordered Over probabilities across 0.5–9.5.
 The expanded models use a named referee from the pre-match fixture when prior
 results are available and fall back to the team-only version otherwise. The
-Brentford–Everton capture has no referee field. Other leagues retain their
-original yellow-card lines.
+Brentford–Everton capture has no referee field. For Bundesliga and La Liga,
+Transfermarkt's games snapshot (through 2026-07-06) supplies referee names.
+We join on date, home and away team, and score. Coverage in the 2021/22–2025/26
+sample was 1,530 of 1,530 Bundesliga fixtures and 1,897 of 1,900 La Liga fixtures.
+[Transfermarkt dataset](https://github.com/dcaribou/transfermarkt-datasets)
 
 The training command compares both variants on the same expanding validation
 folds and prints Brier scores and event counts for every line. Only six of
@@ -226,10 +230,17 @@ own tables for all open lines in the capture.
 
 ### Experimental total-card signals
 
-The same fit command also trains Premier League models for aggregate yellows
-plus twice aggregate reds. The dashboard labels this target as a proxy and
+The same fit command also trains separate models for aggregate yellows plus
+twice aggregate reds in each of the three leagues. The dashboard labels this target as a proxy and
 applies the standard five-color scale only to matching open lines in the
 snapshot. The Brier scores measure the aggregate proxy, whose labels may
 differ from Superbet settlement because the source omits the circumstances
 of individual cards. Exact settlement validation still needs event-level
 data. Refresh the model file with the fit command and restart the dashboard.
+
+### European competition offers
+
+The watcher includes Champions League and Europa League. The dashboard uses
+combined domestic and European form for 1X2 and full-match goal signals.
+See the [European model plan](european-model-plan.md) for source coverage,
+evaluations, and the remaining market work.

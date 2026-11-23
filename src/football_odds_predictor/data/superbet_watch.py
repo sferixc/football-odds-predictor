@@ -1,4 +1,4 @@
-"""Discover the three project leagues and capture each upcoming fixture once."""
+"""Discover the project competitions and capture each upcoming fixture once."""
 
 import argparse
 from dataclasses import dataclass
@@ -10,9 +10,9 @@ import time
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-from .superbet_snapshot import ENDPOINT, capture, utc_timestamp
+from .superbet_snapshot import ENDPOINT, UCL_TOURNAMENT, UEL_TOURNAMENT, capture, utc_timestamp
 
-LEAGUES = {106: "Premier League", 245: "Bundesliga", 98: "La Liga"}
+LEAGUES = {106: "Premier League", 245: "Bundesliga", 98: "La Liga", UCL_TOURNAMENT: "Champions League", UEL_TOURNAMENT: "Europa League"}
 REFRESH_INTERVAL = timedelta(hours=1)
 TARGET_LEAD = timedelta(minutes=15)
 MINIMUM_LEAD = timedelta(minutes=10)

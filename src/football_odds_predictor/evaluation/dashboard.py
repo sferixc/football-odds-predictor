@@ -10,7 +10,9 @@ from pathlib import Path
 import pickle
 from urllib.parse import parse_qs, urlsplit
 
+from ..data.referees import APPOINTMENTS
 from ..models.cards import load_card_models
+from ..models.ucl import load_ucl_models
 from ..training.fit_sporting import DEFAULT_MODELS
 from .superbet_report import RAW, build_report, read_snapshot
 
@@ -39,8 +41,8 @@ def snapshots() -> dict:
 
 def handler_for(models: dict) -> type[BaseHTTPRequestHandler]:
     @lru_cache(maxsize=16)
-    def report(path: Path, modified: int, probe: bool, stress: Decimal | None) -> dict:
-        # The modification time invalidates a cache entry if the local snapshot changes.
+    def report(path: Path, modified: int, appointments_modified: int, probe: bool, stress: Decimal | None) -> dict:
+        # Modification times invalidate the cache when local offers or referee appointments change.
         event, observed = read_snapshot(path, probe)
         return build_report(event, observed, stress, models)
 
@@ -78,7 +80,11 @@ def handler_for(models: dict) -> type[BaseHTTPRequestHandler]:
                 if not stress.is_finite() or not 0 <= stress < 100:
                     raise ValueError("Sensitivity must be from 0 to 99 percentage points.")
                 path = item["path"]
-                result = report(path, path.stat().st_mtime_ns, item["probe"], stress / 100 if stress else None)
+                appointments_modified = APPOINTMENTS.stat().st_mtime_ns if APPOINTMENTS.is_file() else 0
+                result = report(
+                    path, path.stat().st_mtime_ns, appointments_modified, item["probe"],
+                    stress / 100 if stress else None,
+                )
                 self.send_json(result)
             except (InvalidOperation, KeyError, OSError, ValueError) as error:
                 self.send_json({"error": str(error)}, 422)
@@ -96,6 +102,7 @@ def main() -> None:
     with args.models.open("rb") as handle:
         models = pickle.load(handle)
     load_card_models(models)
+    load_ucl_models(models)
     try:
         server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(models))
     except OSError as error:

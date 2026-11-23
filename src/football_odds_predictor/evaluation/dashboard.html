@@ -67,6 +67,7 @@ th,td{padding:10px 14px;border-top:1px solid #e5ebe7}th{background:#f5f8f6;font-
   </section>
   <div id="player-filter" class="control" hidden><label for="player">Find a player</label><input id="player" type="search" placeholder="Player name"></div>
   <p id="status" role="status" aria-live="polite"></p>
+  <p id="superbet-link" hidden><a href="https://superbet.ro/pariuri-sportive/fotbal" target="_blank" rel="noopener">Open Superbet football</a></p>
   <div id="sections"></div>
 </main>
 <script>
@@ -144,6 +145,7 @@ function displaySections(rawSections) {
 function render() {
   sections.replaceChildren();
   const available = displaySections(report?.sections ?? []);
+  document.querySelector('#superbet-link').hidden = !report?.offer_only;
   const groups = new Set(available.map(section => section.group));
   if (groups.size && !groups.has(active)) active = groups.values().next().value;
   document.querySelector('#player-filter').hidden = active !== 'shots';
@@ -157,9 +159,12 @@ function render() {
     const card = element('section', undefined, 'card');
     const title = element('div', undefined, 'card-title');
     title.append(element('h2', section.name));
-    if (section.group === 'shots') title.append(element('p', 'Model odds assume the player takes part.'));
+    if (section.group === 'shots' && !section.quote_only) title.append(element('p', 'Model odds assume the player takes part.'));
     if (section.group === 'cards') {
       if (section.note) title.append(element('p', section.note));
+    }
+    if (section.quote_only || (section.group === 'cards' && report.competition)) {
+      title.append(element('p', 'Superbet prices only. Model data unavailable for this market.'));
     }
     card.append(title);
     const shots = section.group === 'shots';
@@ -190,7 +195,7 @@ function render() {
         element('td', standard, scored && item.promotion == null ? 'priced' : ''),
         element('td', asOdds(item.promotion), scored && item.promotion != null ? 'priced' : ''));
       if (shots) {
-        row.append(element('td', item.last_result));
+        row.append(element('td', item.last_result ?? '—'));
       } else {
         row.append(element('td', asPercent(item.loss)), element('td', asPercent(item.return, true)),
           element('td', asPercent(item.prudent, true)));
@@ -219,9 +224,11 @@ async function loadReport() {
     report = data;
     document.querySelector('#fixture').textContent = report.fixture;
     const parts = ['Kickoff ' + timestamp(report.kickoff), 'Offer ' + timestamp(report.observed)];
+    if (report.competition) parts.unshift(report.competition);
+    if (report.domestic_history_complete === false) parts.push('Incomplete domestic history');
     if (report.last_results.length) parts.push('Team results through ' + report.last_results.join(' / '));
     document.querySelector('#metadata').textContent = parts.join(' · ');
-    status.textContent = stress.value === '0'
+    status.textContent = report.offer_only ? 'Superbet prices only. Model unavailable for this fixture.' : stress.value === '0'
       ? 'Choose a sensitivity scenario to show signal colors.'
       : 'Provisional signals. The underlined price is used for return: Promo when available, otherwise Superbet.';
     render();

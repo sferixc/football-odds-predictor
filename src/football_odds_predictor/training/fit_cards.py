@@ -1,4 +1,4 @@
-"""Train and evaluate Premier League card count models."""
+"""Train and evaluate card count models by league."""
 
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -16,17 +16,22 @@ from ..evaluation.referee_cards import referee_dataset
 from ..models.cards import CARD_LINES, CARD_MODELS, REFEREE_INPUT
 
 
-def main() -> None:
-    rows, inputs = referee_dataset()
+def fit_league(league: str) -> dict:
+    rows, inputs = referee_dataset(league)
     targets = tuple(f"{scope}_{stat}" for stat in ("yellows", "card_points")
                     for scope in ("home", "away", "match"))
     history = rows[["match_date", "referee", "match_yellows"]]
-    rows = rows.dropna(subset=[*inputs, *targets, REFEREE_INPUT])
+    variants_to_fit = {"team": inputs}
+    required = [*inputs, *targets]
+    if rows[REFEREE_INPUT].notna().any():
+        variants_to_fit["referee"] = [*inputs, REFEREE_INPUT]
+        required.append(REFEREE_INPUT)
+    rows = rows.dropna(subset=required)
     train, _ = final_test_split(rows)
     models = {}
     for target in targets:
         variants = {}
-        for name, columns in (("team", inputs), ("referee", [*inputs, REFEREE_INPUT])):
+        for name, columns in variants_to_fit.items():
             estimator = make_pipeline(StandardScaler(), PoissonRegressor(alpha=1.0))
             scores, outcomes = [], []
             for _, earlier, later in validation_folds(rows):
@@ -37,15 +42,19 @@ def main() -> None:
             actual, probabilities = np.asarray(outcomes), np.asarray(scores)
             for index, line in enumerate(CARD_LINES):
                 brier = brier_score_loss(actual[:, index], probabilities[:, index])
-                print(f"{target} > {line:g} | {name} | {actual[:, index].sum()}/{len(actual)} overs | Brier {brier:.4f}")
+                print(f"{league} | {target} > {line:g} | {name} | {actual[:, index].sum()}/{len(actual)} overs | Brier {brier:.4f}")
             estimator.fit(train[columns], train[target])
             variants[name] = {"estimator": estimator, "inputs": columns}
         models[target] = variants
-    bundle = {
+    return {
         "training_end": train["source_kickoff"].max().date(),
         "models": models,
         "referee_history": history,
     }
+
+
+def main() -> None:
+    bundle = {"leagues": {league: fit_league(league) for league in ("E0", "D1", "SP1")}}
     with NamedTemporaryFile(dir=CARD_MODELS.parent, delete=False) as temporary:
         path = Path(temporary.name)
         try:

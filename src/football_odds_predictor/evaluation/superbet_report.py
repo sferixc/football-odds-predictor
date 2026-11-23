@@ -16,12 +16,14 @@ import pandas as pd
 
 from ..data.features import build_features
 from ..data.preprocessing import load_matches
+from ..data.referees import pre_match_referee
 from ..data.sporting import (
     read_player_appearances, read_team_matches, team_features,
 )
-from ..data.superbet_snapshot import check_window, open_price, simple_promotions, utc_timestamp
+from ..data.superbet_snapshot import EUROPEAN_TOURNAMENTS, check_window, open_price, simple_promotions, utc_timestamp
 from ..models.cards import CARD_LINES, load_card_models, card_probabilities
 from ..models.sporting import predict_saved as predict_saved
+from ..models.ucl import goal_probabilities, load_ucl_models, predict_ucl
 from ..training.fit_sporting import DEFAULT_MODELS, PLAYER_LINES
 from ..training.sporting import TEAM_THRESHOLDS
 from .offer import assess_offer
@@ -178,6 +180,35 @@ def card_offer_sections(event: dict) -> list[dict]:
     return sections
 
 
+def european_offer_sections(event: dict, groups: tuple[str, ...], player_filter: str | None) -> list[dict]:
+    """Expose UEFA prices without applying domestic probability models."""
+    definitions = {547: ("1x2", "Full-time result"), 236218: ("shots", "Player total shots")}
+    for group in ("goals", "corners"):
+        definitions.update({market_id: (group, label) for market_id, _, label in TEAM_MARKETS[group]})
+    sections = card_offer_sections(event) if "cards" in groups else []
+    for market in event["markets"]:
+        if market["id"] not in definitions:
+            continue
+        group, name = definitions[market["id"]]
+        if group not in groups:
+            continue
+        rows = []
+        for odd in market["odds"]:
+            if not open_price(odd):
+                continue
+            label = odd["metadata"]["name"]
+            if group == "shots" and player_filter and player_filter.casefold() not in label.casefold():
+                continue
+            label = re.sub(r"\b(?:Peste|Sub) (?=\d)",
+                           lambda match: "Over " if match[0] == "Peste " else "Under ", label)
+            rows.append({"selection": label, "standard": odd["price"]})
+        if rows:
+            sections.append({
+                "group": group, "name": name, "rows": rows, "quote_only": True, "market_id": market["id"],
+            })
+    return sections
+
+
 def _player_name(name: str) -> str:
     decomposed = unicodedata.normalize("NFKD", name.casefold())
     return "".join(letter for letter in decomposed if letter.isalnum())
@@ -290,14 +321,53 @@ def build_report(
 ) -> dict:
     """Build market sections from one snapshot and the saved models."""
     fixture = event["fixture"]
-    if int(fixture["tournament_id"]) not in LEAGUES:
-        raise ValueError("This report covers Premier League, Bundesliga, and La Liga")
     report = {
         "fixture": fixture["event_name"].replace("·", " – "),
         "kickoff": fixture["utc_date"], "observed": observed,
         "stress_pp": float(stress * 100) if stress is not None else None,
         "last_results": [], "sections": [],
     }
+    tournament = int(fixture["tournament_id"])
+    if tournament in EUROPEAN_TOURNAMENTS:
+        competition = EUROPEAN_TOURNAMENTS[tournament]
+        report["competition"] = "Champions League" if competition == "CL" else "Europa League"
+        report["sections"] = european_offer_sections(event, groups, player_filter)
+        forecast = predict_ucl(models.get("ucl"), fixture, utc_timestamp(fixture["utc_date"]), competition)
+        if forecast is not None:
+            result, expected_goals, last_dates, has_domestic_history = forecast
+            promotions = simple_promotions(event)
+            for section in report["sections"]:
+                market = section.get("market_id")
+                if market not in (547, 200734):
+                    continue
+                prices = {row["selection"]: row["standard"] for row in section["rows"]}
+                if market == 547:
+                    boosted = {}
+                    for offer in promotions:
+                        if offer["market"] == "1x2":
+                            selection = offer["selection"]
+                            boosted[selection] = max(boosted.get(selection, 0), offer["odds"])
+                    rows = selection_rows(("1", "X", "2"), result, prices, boosted, stress)
+                else:
+                    rows = []
+                    lines = {float(match[1]) for selection in prices
+                             if (match := re.fullmatch(r"(?:Over|Under) (\d+\.5)", selection))}
+                    for line in sorted(lines):
+                        standard, boosted = team_prices(event, market, "match_goals", line, promotions)
+                        rows.extend(selection_rows(
+                            ("Sub", "Peste"), goal_probabilities(line, expected_goals), standard, boosted, stress,
+                        ))
+                        for row in rows[-2:]:
+                            row["selection"] += f" {line:g}"
+                    if not rows:
+                        continue
+                section.update(rows=rows, quote_only=False)
+            report["last_results"] = last_dates
+            report["domestic_history_complete"] = has_domestic_history
+        report["offer_only"] = all(section["quote_only"] for section in report["sections"])
+        return report
+    if tournament not in LEAGUES:
+        raise ValueError("This report covers Premier League, Bundesliga, La Liga, Champions League, and Europa League")
     sections = report["sections"]
     promotions = simple_promotions(event)
     zone = LEAGUES[int(fixture["tournament_id"])][1]
@@ -324,16 +394,20 @@ def build_report(
                                        prices, boosted, stress),
             })
 
+        league = LEAGUES[int(fixture["tournament_id"])][0]
         card_quotes = card_offer_sections(event) if "cards" in groups else []
+        referee = pre_match_referee(event, utc_timestamp(observed)) if (
+            "cards" in groups and observed != "untimed probe"
+        ) else fixture.get("referee")
         for group in groups:
             for market_id, target, label in TEAM_MARKETS.get(group, ()):
-                if group == "cards" and LEAGUES[int(fixture["tournament_id"])][0] == "E0":
+                if group == "cards":
                     scope = target.split("_", 1)[0]
-                    bundle = models.get("yellow_card_counts")
+                    bundle = models.get("yellow_card_counts", {}).get(league)
                     proxy = bundle is not None and f"{scope}_card_points" in bundle["models"]
                     forecast = f"{scope}_card_points" if proxy else target
                     overs, with_referee = card_probabilities(
-                        bundle, current, forecast, cutoff, fixture.get("referee"),
+                        bundle, current, forecast, cutoff, referee,
                     )
                     if overs is not None:
                         prices = {
@@ -383,11 +457,14 @@ def print_report(
     report = build_report(event, observed, stress, models, groups, player_filter)
     print(f"{report['fixture']} | kickoff {report['kickoff']}")
     print(f"Offer: {observed}")
-    if observed == "untimed probe":
-        print("Replay of an untimed offer. Probabilities use the local results archive.")
-    if stress is not None:
-        print(f"Provisional color uses a {stress * 100:g} percentage-point reduction.")
-    print("Return uses Promo when available and Superbet otherwise.")
+    if report.get("offer_only"):
+        print(f"{report['competition']} · Superbet prices only")
+    else:
+        if observed == "untimed probe":
+            print("Replay of an untimed offer. Probabilities use the local results archive.")
+        if stress is not None:
+            print(f"Provisional color uses a {stress * 100:g} percentage-point reduction.")
+        print("Return uses Promo when available and Superbet otherwise.")
     if report["last_results"]:
         print(f"Latest team results used (home / away): {' / '.join(report['last_results'])}")
 
@@ -443,11 +520,15 @@ def main() -> None:
                 raise ValueError("No saved captures yet. Run the watcher or pass a snapshot path.")
         event, observed = read_snapshot(snapshot, args.probe)
         groups = tuple(dict.fromkeys(args.market)) if args.market else (("shots",) if args.player else GROUPS)
-        if not args.models.is_file():
+        if not args.models.is_file() and int(event["fixture"]["tournament_id"]) not in EUROPEAN_TOURNAMENTS:
             raise ValueError("Model file missing. First run football_odds_predictor.training.fit_sporting.")
-        with args.models.open("rb") as handle:
-            models = pickle.load(handle)
-        load_card_models(models)
+        models = {}
+        if int(event["fixture"]["tournament_id"]) not in EUROPEAN_TOURNAMENTS:
+            with args.models.open("rb") as handle:
+                models = pickle.load(handle)
+            load_card_models(models)
+        else:
+            load_ucl_models(models)
         highlighted = args.color == "always" or (
             args.color == "auto" and sys.stdout.isatty() and "NO_COLOR" not in os.environ
             and os.environ.get("TERM") != "dumb"
