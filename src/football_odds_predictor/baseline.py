@@ -50,7 +50,13 @@ def ridge_predictions(train: pd.DataFrame, validation: pd.DataFrame) -> np.ndarr
     return np.exp(np.maximum(log_odds, np.log(1.01)))
 
 
-def xgboost_predictions(train: pd.DataFrame, validation: pd.DataFrame) -> np.ndarray:
+def xgboost_predictions(
+    train: pd.DataFrame,
+    validation: pd.DataFrame,
+    *,
+    max_depth: int = 3,
+    n_estimators: int = 200,
+) -> np.ndarray:
     """Fit one tree ensemble per 1X2 outcome and return decimal odds."""
     inputs = [
         "home_elo", "away_elo",
@@ -64,8 +70,8 @@ def xgboost_predictions(train: pd.DataFrame, validation: pd.DataFrame) -> np.nda
     for target in TARGET_COLUMNS:
         model = XGBRegressor(
             objective="reg:squarederror",
-            n_estimators=200,
-            max_depth=3,
+            n_estimators=n_estimators,
+            max_depth=max_depth,
             learning_rate=0.05,
             random_state=42,
             n_jobs=1,
@@ -81,8 +87,12 @@ def main() -> None:
     parser.add_argument("--features", type=Path, default=Path("data/processed/features.csv"))
     parser.add_argument("--matches", type=Path, default=Path("data/processed/matches.csv"))
     parser.add_argument("--model", choices=("median", "ridge", "xgboost"), default="median")
+    parser.add_argument("--max-depth", type=int, default=3, help="Maximum XGBoost tree depth")
+    parser.add_argument("--n-estimators", type=int, default=200, help="XGBoost trees per outcome")
     # parse_args() turns options such as --model ridge into args.model == "ridge".
     args = parser.parse_args()
+    if args.model == "xgboost" and min(args.max_depth, args.n_estimators) < 1:
+        parser.error("--max-depth and --n-estimators must be positive")
 
     dataset = load_dataset(args.features, args.matches)
     log_errors = []
@@ -90,7 +100,9 @@ def main() -> None:
     for season, train, validation in validation_folds(dataset):
         prediction_summary = ""
         if args.model == "xgboost":
-            predictions = xgboost_predictions(train, validation)
+            predictions = xgboost_predictions(
+                train, validation, max_depth=args.max_depth, n_estimators=args.n_estimators,
+            )
         elif args.model == "ridge":
             predictions = ridge_predictions(train, validation)
         else:

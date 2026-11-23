@@ -92,3 +92,25 @@ Run `uv run python -m football_odds_predictor.baseline --model xgboost` on datas
 | Fold mean | 0.1617 | **0.1512** | **0.6352** |
 
 XGBoost improved the primary metric in every fold and lowered its fold mean by about 6.5%. The experiment changes both model and input representation, so it measures their combined effect. The 2025/26 test season remains reserved.
+
+### XGBoost parameter search
+
+**Question.** Does changing tree depth or the number of trees improve validation error? Try all nine pairs on the same dataset and folds as above. Keep the inputs, targets, learning rate, seed, and thread count fixed.
+
+```bash
+for depth in 2 3 4; do
+  for trees in 100 200 400; do
+    echo "Depth $depth, trees $trees"
+    uv run python -m football_odds_predictor.baseline --model xgboost \
+      --max-depth "$depth" --n-estimators "$trees"
+  done
+done
+```
+
+| Maximum depth | 100 trees | 200 trees | 400 trees |
+| ---: | ---: | ---: | ---: |
+| 2 | 0.1629 | 0.1552 | 0.1532 |
+| 3 | 0.1554 | 0.1512 | 0.1506 |
+| 4 | 0.1526 | 0.1505 | **0.1502** |
+
+**Worked example.** Depth 4 with 400 trees scored 0.1569, 0.1613, and 0.1324 on the three validation seasons. Their average was 0.1502 log-odds MAE, about 0.6% lower than the original depth 3 with 200 trees. It scored slightly worse than the original in 2022/23. Use the winning settings as the tuned comparison and keep the original command defaults for reproducing the first run. The 2025/26 season was held out.
