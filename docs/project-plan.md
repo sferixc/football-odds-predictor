@@ -58,3 +58,20 @@ The decimal-odds MAE for this match is `(0.58 + 0.73 + 2.10) / 3 ≈ 1.14`. For 
 Both metrics average absolute errors over fixtures and the three outcomes within each fold. Reserve 2025/26 for the final test after model selection.
 
 The reference to beat is **0.3396 mean log-odds MAE** across the three folds. Compare the regression, XGBoost, and LSTM on those same fixtures and metric.
+
+## Ridge regression baseline
+
+**Question.** How much does adding Elo and recent form improve on the median?
+
+Run `uv run python -m football_odds_predictor.baseline --model ridge` on dataset `01551de`. Use 22 inputs per fixture, the two current Elo ratings and ten five-match averages per team. In each fold, fit the scaler and Ridge regression (`alpha=1.0`) on training fixtures. Fit three log-odds targets, convert predictions back to decimal odds, and apply a minimum of 1.01. This run is deterministic.
+
+**Worked example.** Before Arsenal–Chelsea on 2 May 2023, Arsenal had Elo 1663 and averaged 2.4 goals scored in its five previous matches. Chelsea had Elo 1517 and averaged 0.2. With the full set of inputs, Ridge predicted **1.54 / 5.19 / 7.01**. The actual prices were **1.57 / 4.33 / 5.50**.
+
+| Validation | Median log-odds MAE | Ridge log-odds MAE | Ridge decimal-odds MAE |
+| --- | ---: | ---: | ---: |
+| 2022/23 | 0.3215 | 0.1644 | 0.6414 |
+| 2023/24 | 0.3495 | 0.1657 | 0.6821 |
+| 2024/25 | 0.3479 | 0.1551 | 0.6520 |
+| Fold mean | 0.3396 | **0.1617** | **0.6585** |
+
+Ridge cut mean log-odds MAE by about 52% and improved every validation season. It is the current reference for XGBoost and LSTM. The 2025/26 test season remains reserved.
