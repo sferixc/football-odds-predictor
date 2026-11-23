@@ -25,6 +25,10 @@ SGD_SETTINGS = {
     "loss": "log_loss", "random_state": SEED, "shuffle": False,
     "average": True, "learning_rate": "constant", "eta0": 0.01, "alpha": 0.001,
 }
+XGB_SETTINGS = {
+    "n_estimators": 150, "max_depth": 2, "learning_rate": 0.05,
+    "random_state": SEED, "n_jobs": 1,
+}
 TEAM_THRESHOLDS = {
     "match_goals": 2.5,
     "first_half_goals": 0.5,
@@ -121,9 +125,7 @@ def evaluate_market(
         gradient, epoch = epoch_predictions(
             x, y, train["source_kickoff"].dt.normalize(), validation_x, classes,
         )
-        trees = XGBClassifier(
-            n_estimators=150, max_depth=2, learning_rate=0.05, random_state=SEED, n_jobs=1,
-        )
+        trees = XGBClassifier(**XGB_SETTINGS)
         trees.fit(x, y)
         predictions = (
             baseline, logistic.predict_proba(validation_x), gradient, trees.predict_proba(validation_x),

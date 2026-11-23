@@ -102,17 +102,26 @@ uv run python -m football_odds_predictor.evaluation.offer --odds 1.90 \
   --win-probability 0.60 --conservative-win-probability 0.55 --stake 2 --budget 100
 ```
 
-### First terminal report
+### Terminal report
 
-The 1X2 report takes a saved snapshot, recreates Elo and form using earlier match dates, and fits the selected SGD classifier on 2021/22–2024/25. It prints probability, fair odds, the standard price and SuperCota, estimated return at the higher displayed price, and the chance of losing. It shows the most recent match date used for each team so stale inputs are visible.
+The report takes a saved snapshot, recreates Elo and form using earlier match dates, and fits the selected model for each supported line on 2021/22–2024/25. For matching team markets it prints probability, fair odds, the standard price and promotion, estimated return at the higher displayed price, and the chance of losing. It shows the most recent result date used for each team and player.
 
 ```bash
-uv run python -m football_odds_predictor.evaluation.superbet_report data/raw/superbet/14656294.json
+uv run python -m football_odds_predictor.evaluation.superbet_report
 ```
 
-This requires the original training files, the 2020/21 Elo warm-up files, and 2026/27 results in `data/raw/football-data-2627/`. Team names must match the sporting archive. The report currently fits the model on demand. It accepts a single untimed test response only with `--probe`. Add `--stress-pp 5` to see provisional colors using a five-percentage-point reduction in probability. The default leaves colors unset until there is calibration evidence.
+The command opens the most recently saved capture in `data/raw/superbet/`. Pass a path to choose another capture. Options `--market 1x2`, `--market goals`, `--market cards`, `--market corners`, and `--market shots` filter sections. Use `--player 'Dewsbury-Hall'` to see one player's selections. Add `--stress-pp 5` to see provisional colors on comparable team offers using a five-percentage-point reduction in probability. The default leaves colors unset until there is calibration evidence.
 
-**Worked example.** An untimed Brentford–Everton probe gave a home-win probability of 45.1%, with a SuperCota of 2.40 and an estimated return of +8.2%. A five-point reduction gives −3.8%, or yellow. The input archive stopped at 8 November for Brentford and 6 November for Everton, so this illustrates the report on the supplied data. The combined watcher and report, saved models, and market support beyond 1X2 are still pending.
+The team sections need the original training files, the 2020/21 Elo warm-up files, and 2026/27 results in `data/raw/football-data-2627/`. Team names must match the archive. The player section uses the xGTables archive and shows probabilities conditional on playing, alongside available prices. It leaves value and colors unset until participation and settlement are modeled. The yellow-card section shows probabilities and fair odds. Superbet's total-cards prices remain separate pending rule mapping. Supported lines are the fixed thresholds evaluated below.
+
+**Worked example.** An untimed Brentford–Everton probe gave a home-win probability of 45.1%, with a SuperCota of 2.40 and an estimated return of +8.2%. A five-point reduction gives −3.8%, or yellow. It gave Kiernan Dewsbury-Hall a 29.6% chance of more than 1.5 shots if he played, with an observed price of 1.48. The latest inputs were from November for the teams and May for the player. Treat this as a reproduction example.
+
+```bash
+uv run python -m football_odds_predictor.evaluation.superbet_report \
+  data/raw/superbet-probes/14656294.json --probe --stress-pp 5
+```
+
+The report fits on demand and runs independently of the watcher. Automatic reporting, saved models, fresh player results, and calibration remain open.
 
 ## First sporting model comparison
 

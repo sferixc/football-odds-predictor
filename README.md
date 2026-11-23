@@ -11,7 +11,7 @@ Football research project using Python 3.12 and uv. The current goal is to estim
 | Sporting probabilities | Compares four approaches on 13 selections across 1X2, goals, yellow cards, corners, and player total shots. Models learn from sporting outcomes. |
 | Superbet collection | Finds fixtures in the three leagues and attempts one capture around 15 minutes before kickoff. Saves the raw offer and extracts supported single-selection promotions. |
 | Offer calculator | Takes supplied probabilities, price, stake, and budget. Shows value, loss probability, and a provisional color. |
-| 1X2 terminal report | Reads a saved Superbet snapshot, predicts the fixture, and compares standard and promotional prices. |
+| Terminal report | Reads a saved Superbet snapshot and shows 1X2, goals, yellow cards, corners, and player total shots for supported lines. |
 | Virtual portfolio evaluator | Replays a CSV of simulated selections and reports profit, return, open stakes, and drawdown. |
 
 The [Bet365 experiment notes](docs/project-plan.md) describe the first research track and its results. The [Superbet assessment plan](docs/superbet-assessment.md) explains the current track, its data sources, worked examples, and results.
@@ -64,4 +64,4 @@ uv run python -m football_odds_predictor.evaluation.offer --odds 1.90 \
 | [Offer assessment](src/football_odds_predictor/evaluation/offer.py) | How the offered price and model probabilities turn into estimated return, risk, and a color. |
 | [Portfolio evaluation](src/football_odds_predictor/evaluation/portfolio.py) | How placements, results, and refunds affect a virtual budget over time. The [worked example](docs/superbet-assessment.md#virtual-portfolio-evaluation) includes a CSV and command. |
 
-The [1X2 terminal report](docs/superbet-assessment.md#first-terminal-report) is the first connection between predictions and a capture. Calibration and the held-out season for sporting probabilities, saved models, and automatic reporting for the remaining markets are pending. Raw captures stay local.
+Run `uv run python -m football_odds_predictor.evaluation.superbet_report` to view the most recent capture. The [terminal report notes](docs/superbet-assessment.md#terminal-report) explain filtering, exact market matching, and the necessary inputs. Calibration and the held-out season for sporting probabilities, saved models, and automatic report generation are pending. Raw captures stay local.

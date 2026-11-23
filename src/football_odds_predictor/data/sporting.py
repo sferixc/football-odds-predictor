@@ -96,8 +96,8 @@ def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list
     return team_features(read_team_matches(raw_dir), elo)
 
 
-def player_dataset(root: Path) -> tuple[pd.DataFrame, list[str]]:
-    """Build player histories and labels for probabilities conditional on playing."""
+def read_player_appearances(root: Path) -> pd.DataFrame:
+    """Load historical appearances with positive minutes and observed shot counts."""
     seasons = []
     for competition in COMPETITIONS:
         for season in SEASONS:
@@ -116,6 +116,16 @@ def player_dataset(root: Path) -> tuple[pd.DataFrame, list[str]]:
     data["match_date"] = pd.to_datetime(data["date"], format="%Y-%m-%d")
     data["source_kickoff"] = data["match_date"]
     data["at_home"] = data["side"].eq("h").astype(int)
+    return data
+
+
+def player_dataset(root: Path) -> tuple[pd.DataFrame, list[str]]:
+    """Build player histories and labels for probabilities conditional on playing."""
+    return player_features(read_player_appearances(root))
+
+
+def player_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Add the previous-five-appearance means to each player row."""
     # Current minutes establish which appearances are evaluated. Only prior means are inputs.
     history = _recent_means(data, ["league", "player_id"], ["minutes", "shots"]).add_prefix("mean_")
     data = data.join(history)
