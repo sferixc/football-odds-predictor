@@ -29,3 +29,32 @@ Run `uv run python -m football_odds_predictor.features --elo-warmup-dir data/raw
 Each row has pre-match Elo and two five-match sequences, oldest first. History and Elo carry over between seasons within the same league. Each team's first rating is 1500, with K=20 and no home advantage adjustment. Incomplete histories stay in the output with `history_complete=false`. Closing odds stay in the normalized table, which can be joined on league, season, source kickoff, and both teams.
 
 V1 assumes results and stats from earlier source dates are available when predicting on the fixture date. The archive lacks publication times, so this is an approximation. Fixtures from the prediction date never contribute results or stats to that day's predictions.
+
+## Validation and median baseline
+
+**Question.** How accurately can we estimate closing odds using only typical historical odds? This gives us a reference for measuring whether Elo and recent form improve predictions.
+
+Run `uv run python -m football_odds_predictor.baseline` on the processed CSVs (dataset version `01551de`). Join on the fixture key and keep complete histories and valid 1X2 targets. For each fold, predict the three training-set median decimal odds for every validation fixture. This baseline uses no match features or random seed.
+
+**Worked example.** For Arsenal–Chelsea on 2 May 2023, sort the home-win odds from the 919 eligible training matches in 2021/22 and take the median. Repeat for draws and away wins. This gives the same three predictions for every 2022/23 validation match. The actual Arsenal–Chelsea odds are used to score those predictions.
+
+| Outcome | Predicted odds | Actual closing odds | Absolute error |
+| --- | ---: | ---: | ---: |
+| Arsenal win (1) | 2.15 | 1.57 | 0.58 |
+| Draw (X) | 3.60 | 4.33 | 0.73 |
+| Chelsea win (2) | 3.40 | 5.50 | 2.10 |
+
+The decimal-odds MAE for this match is `(0.58 + 0.73 + 2.10) / 3 ≈ 1.14`. For the primary metric, log-odds MAE, take the natural log of each predicted and actual decimal odd before measuring the absolute difference. For example, changing 2 to 4 gives the same log error as changing 4 to 8. Squared error would give large misses more weight.
+
+**Results.** Each row measures the error on the next season using only earlier seasons to calculate the medians.
+
+| Validation | Training seasons | Train / validation fixtures | Log-odds MAE | Decimal-odds MAE |
+| --- | --- | ---: | ---: | ---: |
+| 2022/23 | 2021/22 | 919 / 1,028 | 0.3215 | 1.1842 |
+| 2023/24 | 2021/22–2022/23 | 1,947 / 1,041 | 0.3495 | 1.3477 |
+| 2024/25 | 2021/22–2023/24 | 2,988 / 1,036 | 0.3479 | 1.3325 |
+| Fold mean | | | 0.3396 | 1.2881 |
+
+Both metrics average absolute errors over fixtures and the three outcomes within each fold. Reserve 2025/26 for the final test after model selection.
+
+The reference to beat is **0.3396 mean log-odds MAE** across the three folds. Compare the regression, XGBoost, and LSTM on those same fixtures and metric.
