@@ -112,7 +112,7 @@ uv run python -m football_odds_predictor.training.fit_sporting
 
 This writes `data/processed/sporting-models.pkl`, including fitted classifiers, scalers, input columns, and historical frequencies where that baseline won. Keep the file local and load only an artifact you generated yourself. Refit when the training data or model settings change.
 
-The report reads the saved models and recreates Elo and form using earlier match dates. For matching team markets it prints model odds, the standard price and promotion, estimated return at the higher displayed price, and the chance of losing. It shows the most recent result date used for each team and player.
+The report reads the saved models and recreates Elo and form using earlier match dates. For matching team markets it prints model odds, the standard price and promotion, estimated return at the promotional price when available or the standard price otherwise, and the chance of losing. It shows the most recent result date used for each team and player.
 
 ```bash
 uv run python -m football_odds_predictor.evaluation.superbet_report
@@ -187,3 +187,21 @@ The commands write `data/processed/sporting-reliability-validation.csv` and `spo
 | Player shots > 1.5, conditional on playing | 23,952 | 0.4442 | 0.9 pp | 0.6 pp |
 
 These gaps describe groups of predictions, with sample counts in the CSVs. They are insufficient to set a conservative probability for an individual selection. Validating the color signals still requires matching actual Superbet offers and settlement rules. Player results do not cover the chance of a player appearing.
+
+### Referee history and card settlement
+
+Superbet's full-time total cards market counts one point for a yellow and two for a red, discards the second yellow, and excludes cards shown to bench players and staff or after the match. The saved Brentford–Everton offer has total cards for the match and each team, with no equivalent yellow-only totals. The Football-Data archive has aggregate yellows and reds. Those columns cannot identify individual second yellows or bench incidents. The local Understat appearance archive also lacks card timing and a separate second-yellow field. A settlement-compatible target requires event-level card types and recipient status. [Superbet settlement rules](https://superbet.ro/wiki/regulament-de-joc-pariuri-cap-7)
+
+The 2021/22–2025/26 Football-Data archive has a referee for all 1,900 Premier League fixtures and no referee field in the Bundesliga or La Liga files. The yellow-card experiment adds one input, the referee's average match yellow total across strictly earlier dates. Both variants use the same 1,096 eligible fixtures across expanding validation folds and train SGD with the same protocol. The 2025/26 final test stays reserved.
+
+| Yellow-card line | Log loss without referee | Log loss with referee |
+| --- | ---: | ---: |
+| Home over 2.5 | 0.6220 | 0.6237 |
+| Away over 2.5 | 0.6524 | 0.6554 |
+| Match over 4.5 | 0.6604 | 0.6652 |
+
+Lower is better. This feature worsened all three validation scores, so the saved models and dashboard are unchanged for cards. A compatible model also needs the referee assignment as it was known before kickoff, with a fallback when the assignment or history is missing.
+
+```bash
+uv run python -m football_odds_predictor.evaluation.referee_cards
+```

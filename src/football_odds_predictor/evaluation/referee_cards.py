@@ -1,0 +1,48 @@
+"""Measure the effect of referee history on Premier League yellow-card forecasts."""
+
+from pathlib import Path
+
+import pandas as pd
+
+from ..data.sporting import team_dataset
+from ..training.sporting import TEAM_THRESHOLDS, add_team_outcomes
+from .sporting import assess_target
+
+RAW = Path("data/raw/football-data")
+REFEREE_INPUT = "referee_prior_yellows"
+
+
+def add_referee_history(rows: pd.DataFrame) -> pd.DataFrame:
+    """Average observations from strictly earlier match days for each referee."""
+    day = rows.groupby(["referee", "match_date"])["match_yellows"].agg(["sum", "count"])
+    prior = day.groupby(level="referee").cumsum() - day
+    days = prior["count"].where(prior["count"].gt(0))
+    return rows.join((prior["sum"] / days).rename(REFEREE_INPUT), on=["referee", "match_date"])
+
+
+def main() -> None:
+    teams, inputs = team_dataset(Path("data/processed/features.csv"), RAW)
+    leagues = teams.loc[teams["league"].eq("E0")].copy()
+    officials = []
+    for path in sorted(RAW.glob("*-E0.csv")):
+        rows = pd.read_csv(path, usecols=["Date", "HomeTeam", "AwayTeam", "Referee"])
+        rows = rows.rename(columns={
+            "HomeTeam": "home_team", "AwayTeam": "away_team", "Referee": "referee",
+        })
+        rows["match_date"] = pd.to_datetime(rows.pop("Date"), format="%d/%m/%Y")
+        rows["referee"] = rows["referee"].str.strip().replace("", pd.NA)
+        officials.append(rows)
+    keys = ["match_date", "home_team", "away_team"]
+    leagues = leagues.merge(pd.concat(officials), on=keys, how="left", validate="one_to_one")
+    add_team_outcomes(leagues)
+    # Restrict both variants to identical fixtures with a known, previously seen referee.
+    eligible = add_referee_history(leagues).dropna(subset=[REFEREE_INPUT])
+    for target in ("home_yellows", "away_yellows", "match_yellows"):
+        print("Without referee history")
+        assess_target(eligible, inputs, target, "sgd", TEAM_THRESHOLDS[target], None)
+        print("With referee history")
+        assess_target(eligible, [*inputs, REFEREE_INPUT], target, "sgd", TEAM_THRESHOLDS[target], None)
+
+
+if __name__ == "__main__":
+    main()
