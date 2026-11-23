@@ -95,9 +95,10 @@ curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/games.csv.gz -
 uv run python -m football_odds_predictor.training.fit_cards
 ```
 
-The watcher uses the fixture schedule to look up referee assignments during the
-last 24 hours before kickoff for Premier League, La Liga, Bundesliga, Champions
-League, and Europa League. It checks again before the odds capture. It uses the
+The watcher looks up the referee at the early odds capture, up to five hours
+before kickoff, for Premier League, La Liga, Bundesliga, Champions League, and
+Europa League. It reuses that assignment for the final capture and tries
+another lookup if the early assignment was unavailable. It uses the
 official UEFA match listing for Champions League when available and the public
 Referee Observer list for the other lookups. A snapshot records the pre-match
 name, source, and observation time separately from the original Superbet payload.
