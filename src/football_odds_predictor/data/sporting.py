@@ -35,8 +35,8 @@ def _recent_means(
     )
 
 
-def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list[str]]:
-    """Read target counts from raw match files and Elo from the feature table."""
+def read_team_matches(raw_dir: Path) -> pd.DataFrame:
+    """Read sporting outcomes without importing bookmaker odds."""
     mapping = {"Div": "league", "HomeTeam": "home_team", "AwayTeam": "away_team", **TEAM_SOURCE}
     seasons = []
     for path in sorted(raw_dir.glob("*.csv")):
@@ -49,7 +49,12 @@ def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list
         seasons.append(rows)
     if not seasons:
         raise ValueError(f"No match CSVs in {raw_dir}")
-    matches = pd.concat(seasons, ignore_index=True)
+    return pd.concat(seasons, ignore_index=True)
+
+
+def team_features(matches: pd.DataFrame, elo: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Build the same inputs for historical results and upcoming fixtures."""
+    matches = matches.reset_index(drop=True)
     matches["match_date"] = matches["source_kickoff"].dt.normalize()
     for side in SIDES:
         matches[f"{side}_second_half_goals"] = (
@@ -75,13 +80,20 @@ def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list
 
     key = list(FIXTURE_COLUMNS)
     elo_columns = ["home_elo", "away_elo"]
-    # Reuse the pre-match ratings from the earlier experiment.
-    elo = pd.read_csv(features_path, usecols=[*key, *elo_columns], parse_dates=["source_kickoff"])
-    dataset = matches.merge(elo, on=key, validate="one_to_one")
+    dataset = matches.merge(elo[[*key, *elo_columns]], on=key, validate="one_to_one")
     if len(dataset) != len(matches) or len(dataset) != len(elo):
         raise ValueError("The raw match and Elo files must contain the same fixtures")
     inputs = [*elo_columns, *(f"{side}_mean_{stat}" for side in SIDES for stat in stats)]
     return dataset.sort_values("source_kickoff", ignore_index=True), inputs
+
+
+def team_dataset(features_path: Path, raw_dir: Path) -> tuple[pd.DataFrame, list[str]]:
+    """Pair raw sporting outcomes with the saved pre-match Elo ratings."""
+    elo = pd.read_csv(
+        features_path, usecols=[*FIXTURE_COLUMNS, "home_elo", "away_elo"],
+        parse_dates=["source_kickoff"],
+    )
+    return team_features(read_team_matches(raw_dir), elo)
 
 
 def player_dataset(root: Path) -> tuple[pd.DataFrame, list[str]]:

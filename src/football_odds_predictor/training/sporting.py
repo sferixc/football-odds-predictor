@@ -55,6 +55,13 @@ def add_team_outcomes(rows: pd.DataFrame) -> None:
 def epoch_predictions(
     x: np.ndarray, y: np.ndarray, dates: pd.Series, outer_x: np.ndarray, classes: np.ndarray,
 ) -> tuple[np.ndarray, int]:
+    scaler, model, epoch = fit_epoch_classifier(x, y, dates, classes)
+    return model.predict_proba(scaler.transform(outer_x)), epoch
+
+
+def fit_epoch_classifier(
+    x: np.ndarray, y: np.ndarray, dates: pd.Series, classes: np.ndarray,
+) -> tuple[StandardScaler, SGDClassifier, int]:
     """Choose an epoch on the last fifth of training dates, then refit on the fold."""
     sorted_days = dates.drop_duplicates().sort_values()
     # Pick one date boundary so that fixtures on the same day stay together.
@@ -85,7 +92,7 @@ def epoch_predictions(
     for _ in range(best_epoch):
         order = rng.permutation(len(y))
         model.partial_fit(fit_x[order], y[order], classes=classes)
-    return model.predict_proba(scaler.transform(outer_x)), best_epoch
+    return scaler, model, best_epoch
 
 
 def evaluate_market(

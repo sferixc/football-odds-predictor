@@ -81,6 +81,8 @@ Display combinations separately when we add a report view for them. Scoring a sa
 
 ## Offer report prototype
 
+The main use case is to check a selection the user already picked. Find the exact selection in the Superbet snapshot, obtain an independent model probability for it, and show the standard and promotional prices where available. The primary metric is estimated return per unit staked, with its conservative counterpart next to it. Display the chance of losing separately. With no refund, a 60% chance at odds of 1.90 gives `0.60 × 1.90 − 1 = +14%` estimated return, a 52.6% break-even probability, and a 40% estimated chance of loss. The return is an average implied by the estimate across comparable bets.
+
 The calculator supports one win/loss selection, with an optional full refund. It takes the two probability estimates and the odds as inputs. It reports an expected return per unit staked, expected profit for the chosen stake, chance of loss, and maximum loss as a share of the budget. Partial settlements and combinations are outside this prototype.
 
 | Signal | Provisional rule |
@@ -100,7 +102,17 @@ uv run python -m football_odds_predictor.evaluation.offer --odds 1.90 \
   --win-probability 0.60 --conservative-win-probability 0.55 --stake 2 --budget 100
 ```
 
-The prototype currently scores supplied inputs. The first probability models are evaluated below. Saving selected models and linking their predictions to captured offers are pending.
+### First terminal report
+
+The 1X2 report takes a saved snapshot, recreates Elo and form using earlier match dates, and fits the selected SGD classifier on 2021/22–2024/25. It prints probability, fair odds, the standard price and SuperCota, estimated return at the higher displayed price, and the chance of losing. It shows the most recent match date used for each team so stale inputs are visible.
+
+```bash
+uv run python -m football_odds_predictor.evaluation.superbet_report data/raw/superbet/14656294.json
+```
+
+This requires the original training files, the 2020/21 Elo warm-up files, and 2026/27 results in `data/raw/football-data-2627/`. Team names must match the sporting archive. The report currently fits the model on demand. It accepts a single untimed test response only with `--probe`. Add `--stress-pp 5` to see provisional colors using a five-percentage-point reduction in probability. The default leaves colors unset until there is calibration evidence.
+
+**Worked example.** An untimed Brentford–Everton probe gave a home-win probability of 45.1%, with a SuperCota of 2.40 and an estimated return of +8.2%. A five-point reduction gives −3.8%, or yellow. The input archive stopped at 8 November for Brentford and 6 November for Everton, so this illustrates the report on the supplied data. The combined watcher and report, saved models, and market support beyond 1X2 are still pending.
 
 ## First sporting model comparison
 
