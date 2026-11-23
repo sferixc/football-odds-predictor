@@ -220,11 +220,12 @@ async function loadReport() {
     document.querySelector('#fixture').textContent = report.fixture;
     if (report.waiting) {
       document.querySelector('#metadata').textContent = 'Kickoff ' + timestamp(report.kickoff) + (report.competition ? ' · ' + report.competition : '');
-      status.textContent = 'Waiting for odds. Early capture starts up to five hours before kickoff.';
+      status.textContent = 'Waiting for odds. The first capture is scheduled three hours before kickoff.';
       sections.replaceChildren();
       return;
     }
-    const parts = ['Kickoff ' + timestamp(report.kickoff), 'Offer ' + timestamp(report.observed)];
+    const offerLabel = match.value.startsWith('superbet/early/') ? 'Early odds captured ' : 'Offer captured ';
+    const parts = ['Kickoff ' + timestamp(report.kickoff), offerLabel + timestamp(report.observed)];
     if (report.competition) parts.unshift(report.competition);
     if (report.domestic_history_complete === false) parts.push('Incomplete domestic history');
     if (report.last_results.length) parts.push('Team results through ' + report.last_results.join(' / '));

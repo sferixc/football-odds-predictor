@@ -9,7 +9,7 @@ Football research project using Python 3.12 and uv. The current dashboard compar
 | Historical match data | Normalizes five seasons from three leagues and builds pre-match Elo and five-match histories. |
 | Bet365 closing-odds experiment | Compares median, Ridge, XGBoost, and LSTM. Includes a final-season test, a replay on recent fixtures, and result plots. |
 | Sporting probabilities | Compares statistical baselines, linear models, and XGBoost across 1X2, goals, yellow cards, corners, and player total shots. These models learn from sporting outcomes, not bookmaker odds. |
-| Superbet collection | Watches Premier League, Bundesliga, La Liga, Champions League, and Europa League fixtures. It captures early odds up to five hours before kickoff and refreshes them around 15 minutes before kickoff and saves the raw offer and supported single-selection promotions. |
+| Superbet collection | Watches Premier League, Bundesliga, La Liga, Champions League, and Europa League fixtures. It captures early odds up to three hours before kickoff and refreshes them around 15 minutes before kickoff and saves the raw offer and supported single-selection promotions. |
 | Offer calculator | Takes supplied probabilities, price, stake, and budget. Shows value, loss probability, and a provisional color. |
 | Match dashboard | Automatically lists today's upcoming fixtures and saved captures. Compare model odds with Superbet prices for 1X2, goals, cards, and corners. |
 | Virtual portfolio evaluator | Replays a CSV of simulated selections and reports profit, return, open stakes, and drawdown. |
@@ -48,7 +48,7 @@ uv run python -m football_odds_predictor.data.superbet_watch
 uv run python -m football_odds_predictor.evaluation.dashboard
 ```
 
-Open [the dashboard](http://127.0.0.1:8765). It lists today's upcoming fixtures and selects the first one automatically. The dashboard refreshes its fixture list every 30 seconds and the public schedule every two minutes. The watcher refreshes its schedule hourly. It attempts an early capture when a fixture enters the next five hours and a final capture around 15 minutes before kickoff (accepted window: 10–20 minutes). The dashboard switches to the final prices once they are saved. Both terminals must stay open. Stop either process with `Ctrl+C`.
+Open [the dashboard](http://127.0.0.1:8765). It lists today's upcoming fixtures and selects the first one automatically. The dashboard refreshes its fixture list every 30 seconds and the public schedule every two minutes. The watcher refreshes its schedule hourly. It attempts an early capture when a fixture enters the next three hours and a final capture around 15 minutes before kickoff (accepted window: 10–20 minutes). The dashboard switches to the final prices once they are saved. Both terminals must stay open. Stop either process with `Ctrl+C`.
 
 The dashboard shows 1X2, goals, cards, and corners. Player shots remain available in the research and terminal report, but are hidden from the dashboard. The sensitivity options reduce the model's estimated probability by 5 or 10 percentage points to calculate provisional colors; with no sensitivity adjustment, colors are blank.
 

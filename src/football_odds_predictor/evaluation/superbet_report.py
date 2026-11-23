@@ -77,7 +77,8 @@ def read_snapshot(path: Path, probe: bool) -> tuple[dict, str]:
     if "event" in data:
         event = data["event"]
         observed = utc_timestamp(data["observed_at_utc"])
-        check_window(utc_timestamp(event["fixture"]["utc_date"]), observed, early=data.get("early") is True)
+        check_window(utc_timestamp(event["fixture"]["utc_date"]), observed,
+                     early=data.get("early") is True, archived=True)
         if "referee_appointment" in data:
             event = {**event, "referee_appointment": data["referee_appointment"]}
         return event, observed.isoformat()

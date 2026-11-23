@@ -81,7 +81,7 @@ uv run python -m football_odds_predictor.data.superbet_watch --list
 uv run python -m football_odds_predictor.data.superbet_watch
 ```
 
-The watcher discovers fixtures in Premier League, Bundesliga, La Liga, Champions League, and Europa League. It refreshes the schedule hourly. It attempts an early capture up to five hours before kickoff and stores it in `data/raw/superbet/early/<event-id>.json`. It keeps the final capture, taken around 15 minutes before kickoff in the 10–20 minute window, in `data/raw/superbet/<event-id>.json`. Stop the watcher with **Ctrl+C**. The 26 domestic leagues used for European team-history coverage are a separate historical-data scope; the live odds watcher does not currently cover all of them.
+The watcher discovers fixtures in Premier League, Bundesliga, La Liga, Champions League, and Europa League. It refreshes the schedule hourly. It attempts an early capture up to three hours before kickoff and stores it in `data/raw/superbet/early/<event-id>.json`. It keeps the final capture, taken around 15 minutes before kickoff in the 10–20 minute window, in `data/raw/superbet/<event-id>.json`. Stop the watcher with **Ctrl+C**. The 26 domestic leagues used for European team-history coverage are a separate historical-data scope; the live odds watcher does not currently cover all of them.
 
 ### Referee inputs
 
@@ -95,7 +95,7 @@ curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/games.csv.gz -
 uv run python -m football_odds_predictor.training.fit_cards
 ```
 
-The watcher looks up the referee at the early odds capture, up to five hours
+The watcher looks up the referee at the early odds capture, up to three hours
 before kickoff, for Premier League, La Liga, Bundesliga, Champions League, and
 Europa League. It reuses that assignment for the final capture and tries
 another lookup if the early assignment was unavailable. It uses the

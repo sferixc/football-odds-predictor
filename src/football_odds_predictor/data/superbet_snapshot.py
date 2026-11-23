@@ -10,7 +10,8 @@ from urllib.request import urlopen
 
 UCL_TOURNAMENT = 80794
 UEL_TOURNAMENT = 688
-EARLY_LEAD = timedelta(hours=5)
+EARLY_LEAD = timedelta(hours=3)
+ARCHIVED_EARLY_LEAD = timedelta(hours=5)
 FINAL_WINDOW_START = timedelta(minutes=20)
 EUROPEAN_TOURNAMENTS = {UCL_TOURNAMENT: "CL", UEL_TOURNAMENT: "EL"}
 ENDPOINT = "https://production-superbet-offer-ro.freetls.fastly.net/v3/ro-RO/events"
@@ -103,12 +104,15 @@ def utc_timestamp(value: str) -> datetime:
     return timestamp.astimezone(UTC)
 
 
-def check_window(kickoff: datetime, observed_at: datetime, *, early: bool = False) -> None:
+def check_window(kickoff: datetime, observed_at: datetime, *, early: bool = False,
+                 archived: bool = False) -> None:
     """Keep early prices separate from the 10 to 20 minute capture."""
     lead = kickoff - observed_at
     if early:
-        if not FINAL_WINDOW_START < lead <= EARLY_LEAD:
-            raise ValueError("Early capture must be more than 20 minutes and at most 5 hours before kickoff")
+        limit = ARCHIVED_EARLY_LEAD if archived else EARLY_LEAD
+        if not FINAL_WINDOW_START < lead <= limit:
+            hours = limit // timedelta(hours=1)
+            raise ValueError(f"Early capture must be more than 20 minutes and at most {hours} hours before kickoff")
     elif not timedelta(minutes=10) <= lead <= FINAL_WINDOW_START:
         raise ValueError("Capture must take place 10–20 minutes before kickoff")
 

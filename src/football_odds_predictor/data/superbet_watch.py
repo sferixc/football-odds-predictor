@@ -92,7 +92,7 @@ def saved_early_appointment(early_dir: Path, fixture: Fixture, now: datetime) ->
         if utc_timestamp(event["fixture"]["utc_date"]) != fixture.kickoff:
             return None
         observed = utc_timestamp(snapshot["observed_at_utc"])
-        check_window(fixture.kickoff, observed, early=True)
+        check_window(fixture.kickoff, observed, early=True, archived=True)
         if observed > now:
             return None
         appointment = snapshot.get("referee_appointment")
