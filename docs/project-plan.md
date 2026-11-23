@@ -157,3 +157,17 @@ Run `uv run python -m football_odds_predictor.evaluation.final_test` on dataset 
 | **Overall** | **1,051** | **0.1369** | **0.5532** |
 
 The average absolute difference was 0.55 decimal-odds units across the three outcomes. Bundesliga had the highest error on both metrics in this test. The result applies to fixtures with complete histories and valid closing odds.
+
+![Mean validation error for Median, Ridge, LSTM, and XGBoost](figures/validation-models.png)
+
+## Replay on recent fixtures
+
+**Question.** How close are the same model's predictions on real 2026/27 matches? Add the season's `E0`, `D1`, and `SP1` CSVs as `2627-{division}.csv` under `data/raw/football-data-2627/`. Run `uv run python -m football_odds_predictor.evaluation.recent` with the historical processed CSVs from dataset version `01551de` and the 2020/21 Elo warm-up files. The script refits the selected XGBoost settings on the original 4,024 training fixtures. It uses earlier results, including those from 2025/26, to update form and Elo for each recent fixture. The output is `data/processed/recent_predictions.csv`. [Source downloads](https://football-data.co.uk/downloadm.php)
+
+**Worked example.** For Villarreal–Getafe on 8 November 2026, the model predicted **1.50 / 4.08 / 5.86**. Bet365 closed at **1.55 / 4.10 / 6.00**.
+
+The snapshot scored **267 of 300 completed fixtures** from August through 8 November 2026. Eligibility requires complete history and valid closing odds. Log-odds MAE was **0.1592** and decimal-odds MAE was **0.6935**. Both errors were higher than on the full 2025/26 test season. This is a retrospective replay of a partial season, with fixture dates used as the availability approximation.
+
+![Predicted versus actual odds for 267 recent fixtures, shown separately for home win, draw, and away win](figures/recent-predictions.png)
+
+Each point represents a fixture. The dashed diagonal marks a prediction equal to the actual closing price.

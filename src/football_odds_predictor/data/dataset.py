@@ -30,7 +30,13 @@ def load_dataset(features_path: Path, matches_path: Path) -> pd.DataFrame:
         usecols=[*FIXTURE_COLUMNS, *TARGET_COLUMNS],
         parse_dates=["source_kickoff"],
     )
+    return join_dataset(features, matches)
+
+
+def join_dataset(features: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
+    """Pair features and closing odds by fixture, then apply V1 eligibility."""
     fixture_key = list(FIXTURE_COLUMNS)
+    matches = matches[[*fixture_key, *TARGET_COLUMNS]]
     if features[fixture_key].isna().any().any() or matches[fixture_key].isna().any().any():
         raise ValueError("Both CSVs must contain complete fixture keys")
     # Match by league, season, kickoff, and both teams so CSV row order can differ.
