@@ -384,20 +384,22 @@ def build_report(
     tournament = int(fixture["tournament_id"])
     if tournament in EUROPEAN_TOURNAMENTS:
         competition = EUROPEAN_TOURNAMENTS[tournament]
+        kickoff = utc_timestamp(fixture["utc_date"])
+        observed_at = None if observed == "untimed probe" else utc_timestamp(observed)
+        cutoff = min(kickoff, observed_at) if observed_at is not None else kickoff
         report["competition"] = "Champions League" if competition == "CL" else "Europa League"
         report["sections"] = european_offer_sections(event, groups, player_filter)
         if "corners" in groups:
             bundle = models.get("europe_corner_counts")
-            kickoff = utc_timestamp(fixture["utc_date"])
-            current = european_corner_inputs(bundle, fixture, kickoff)
-            corners = corner_sections(event, bundle, competition, current, kickoff,
+            current = european_corner_inputs(bundle, fixture, cutoff)
+            corners = corner_sections(event, bundle, competition, current, cutoff,
                                       simple_promotions(event), stress)
             if corners:
                 report["sections"] = [section for section in report["sections"] if section["group"] != "corners"]
                 report["sections"].extend(corners)
-        referee = pre_match_referee(event, utc_timestamp(observed)) if observed != "untimed probe" else fixture.get("referee")
+        referee = pre_match_referee(event, cutoff) if observed_at is not None else fixture.get("referee")
         forecast = predict_ucl(
-            models.get("ucl"), fixture, utc_timestamp(fixture["utc_date"]), competition, referee,
+            models.get("ucl"), fixture, kickoff, competition, referee, observed_at=observed_at,
         )
         if forecast is not None:
             result, expected_goals, last_dates, has_domestic_history, card_forecasts = forecast

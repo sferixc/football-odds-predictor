@@ -30,8 +30,8 @@ def referee_key(name):
     return club_key(name) if isinstance(name, str) and name.strip() else None
 
 
-def predict_ucl(bundle, fixture, kickoff, competition="CL", referee=None):
-    """Read each club's shared rating and form strictly before kickoff day."""
+def predict_ucl(bundle, fixture, kickoff, competition="CL", referee=None, *, observed_at=None):
+    """Read results strictly before the day the forecast was available."""
     season = kickoff.year - (kickoff.month < 7)
     if (bundle is None or "competitions" not in bundle or season <= bundle["training_end"]
             or kickoff.month not in (9, 10, 11, 12, 1)):
@@ -42,21 +42,22 @@ def predict_ucl(bundle, fixture, kickoff, competition="CL", referee=None):
     home, away = (bundle["names"].get(club_key(name.strip())) for name in teams)
     if home is None or away is None or home == away:
         return None
+    cutoff_day = min(kickoff, observed_at).date() if observed_at is not None else kickoff.date()
     ratings, history, last_dates = {}, {}, []
     for team in (home, away):
         timeline = bundle["timeline"].get(team, ())
-        index = bisect_left(timeline, kickoff.date(), key=lambda row: row[0])
+        index = bisect_left(timeline, cutoff_day, key=lambda row: row[0])
         if index < 1:
             return None
         day, ratings[team], history[team] = timeline[index - 1]
-        if len(history[team]) < 5 or (kickoff.date() - day).days > 60:
+        if len(history[team]) < 5 or (cutoff_day - day).days > 60:
             return None
         last_dates.append(str(day))
     x = [pre_match_inputs(home, away, ratings, history)]
     models = bundle["competitions"][competition]
     card_forecasts = {}
     referee_history = bundle.get("referee_cards", {}).get(referee_key(referee), ())
-    ref_index = bisect_left(referee_history, kickoff.date(), key=lambda row: row[0])
+    ref_index = bisect_left(referee_history, cutoff_day, key=lambda row: row[0])
     prior = referee_history[ref_index - 1] if ref_index else None
     for scope, variants in models.get("cards", {}).items():
         use_referee = bool("referee" in variants and prior and prior[2] >= MIN_REFEREE_MATCHES)

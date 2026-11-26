@@ -1,5 +1,7 @@
 """Fit and audit UCL and Europa League forecasts with shared club history."""
 
+import argparse
+from collections import Counter
 from pathlib import Path
 import pickle
 from tempfile import NamedTemporaryFile
@@ -12,7 +14,8 @@ from sklearn.metrics import log_loss, mean_poisson_deviance
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from ..data.europe import EUROPE, INPUTS, build_europe_history, read_europe_games
+from ..data.europe import CURRENT_LEAGUES, EUROPE, INPUTS, build_europe_history, read_europe_games
+from ..data.europe_elo import COUNTRY_CODES, ELO_ARCHIVE, EuropeanEloSeeds
 from ..models.ucl import UCL_MODELS, club_key
 from .europe_cards import fit_europe_cards
 
@@ -47,9 +50,50 @@ def fit_competition(rows, european_only, competition):
     return {"result": result, "goals": goals}
 
 
+def score_seeds(rows, previous):
+    """Compare identical 1X2 models on identical chronological validation fixtures."""
+    keys = ["game_id", "date", "competition", "season"]
+    if not rows.loc[rows.season.between(2021, 2025), keys].reset_index(drop=True).equals(
+        previous.loc[previous.season.between(2021, 2025), keys].reset_index(drop=True)
+    ):
+        raise ValueError("Elo variants must use the same historical fixtures")
+
+    for competition in sorted(EUROPE):
+        for season in (2022, 2023, 2024, 2025):
+            scores = []
+            for dataset in (previous, rows):
+                fixtures = dataset.loc[dataset.competition.eq(competition)]
+                train = fixtures.loc[fixtures.season.between(2021, season - 1)]
+                validation = fixtures.loc[fixtures.season.eq(season)]
+                estimator = make_pipeline(StandardScaler(), LogisticRegression())
+                estimator.fit(train[list(INPUTS)].to_numpy(), train.result)
+                scores.append(log_loss(validation.result, estimator.predict_proba(
+                    validation[list(INPUTS)].to_numpy(),
+                )))
+            split = "holdout" if season == 2025 else "validation"
+            print(f"{competition} {season}/{season + 1} {split} 1X2 log loss "
+                  f"| former Elo {scores[0]:.4f} | dated Elo {scores[1]:.4f}")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--elo-source", type=Path, default=ELO_ARCHIVE)
+    args = parser.parse_args()
+    if not args.elo_source.is_dir():
+        parser.error(f"Elo archive missing: {args.elo_source}. See CONTRIBUTING.md for the pinned download.")
     games, names = read_europe_games(club_key)
-    rows, timeline = build_europe_history(games)
+    seeds = EuropeanEloSeeds(args.elo_source, names, club_key,
+                             {league: COUNTRY_CODES[country] for country, league in CURRENT_LEAGUES.items()})
+    audit = {}
+    rows, timeline = build_europe_history(games, seeds=seeds, initial_audit=audit)
+    previous, _ = build_europe_history(games)
+    print(f"Initial Elo coverage: {dict(Counter(item[2] for item in audit.values()))}")
+    for name in ("OFI Crete", "Manchester City"):
+        club = names.get(club_key(name))
+        if club in audit:
+            debut, elo, source, as_of = audit[club]
+            print(f"{name}: {elo:.2f} ({source}, {as_of}) before {debut}")
+    score_seeds(rows, previous)
     baseline, _ = build_europe_history(games, mixed=False)
     models = {competition: fit_competition(
         rows.loc[rows.competition.eq(competition)], baseline.loc[baseline.competition.eq(competition)], competition,
@@ -81,6 +125,7 @@ def main() -> None:
         known = group.referee.fillna("").str.strip().ne("").sum()
         print(f"{competition} historical referee coverage: {known}/{len(group)}")
     bundle = {"names": names, "referee_cards": referee_cards, "timeline": timeline, "competitions": models,
+              "elo_initialization": audit,
               "domestic": set(leagues.club_id), "training_end": rows.loc[rows.season.le(2024), "season"].max()}
     with NamedTemporaryFile(dir=UCL_MODELS.parent, delete=False) as temporary:
         path = Path(temporary.name)

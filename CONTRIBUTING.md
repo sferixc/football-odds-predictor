@@ -114,18 +114,26 @@ The watcher also captures Champions League and Europa League offers. With the
 same Transfermarkt archive, add recent results and rebuild the European models:
 
 ```bash
-mkdir -p data/raw/open-matchday data/raw/openfootball
+mkdir -p data/raw/open-matchday data/raw/openfootball data/raw/sporteden-2026-11-26
 curl -fL https://codeload.github.com/oladeeayo/open-matchday/zip/refs/heads/master -o data/raw/open-matchday/results-2627.zip
 curl -fL https://openfootball.github.io/europe/slovakia_2023-24_sk1.json -o data/raw/openfootball/slovakia_2023-24_sk1.json
 curl -fL https://openfootball.github.io/europe/slovakia_2024-25_sk1.json -o data/raw/openfootball/slovakia_2024-25_sk1.json
 curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/game_events.csv.gz -o data/raw/transfermarkt/game_events.csv.gz
 curl -fL https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/game_lineups.csv.gz -o data/raw/transfermarkt/game_lineups.csv.gz
+for year in {2019..2026}; do
+    path="data/raw/sporteden-2026-11-26/$year.csv"
+    if [ ! -e "$path" ]; then
+        curl -fL "https://api.sporteden.com/v1/sport/common/elo/football/download/history/$year.csv?type=normal" -o "$path"
+    fi
+done
 uv run python -m football_odds_predictor.training.fit_ucl
 ```
 
 Restart the dashboard and watcher. The European models cover 1X2, full-match goals and the home, away and match
 card totals in both competitions. European card forecasts require the two
-Transfermarkt event and lineup files. See the
+Transfermarkt event and lineup files. The Elo start values use [Sport Eden Elo](https://sporteden.com/rankings/elo/football/download)
+under CC BY 4.0. The documented run uses the exports retrieved on 2026-11-26;
+the publisher may revise ratings in later downloads. See the
 [European model plan](docs/european-model-plan.md) for coverage and evaluation.
 
 ### European corner inputs

@@ -8,6 +8,7 @@ from zipfile import ZipFile
 
 import pandas as pd
 
+from .features import HISTORY_LENGTH
 from .referees import ARCHIVE, CLUBS
 
 EUROPE = {"CL", "EL"}
@@ -17,6 +18,7 @@ OPEN_MATCHDAY = Path("data/raw/open-matchday/results-2627.zip")
 SLOVAKIA = Path("data/raw/openfootball")
 ELO_SEED = Path("data/raw/europe-elo-2020.csv")
 START = pd.Timestamp("2020-08-01")
+MAX_WARMUP_AGE = pd.Timedelta(days=365)
 INPUTS = ("elo_difference", "home_margin", "away_margin", "home_opponents", "away_opponents",
           "home_history", "away_history", "home_domestic_share", "away_domestic_share")
 DOMESTIC = {"E0": "GB1", "D1": "L1", "SP1": "ES1", "I1": "IT1"}
@@ -30,6 +32,20 @@ CURRENT_LEAGUES = {
 }
 CURRENT_CUPS = {"champions-league": "CL", "europa-league": "EL", "conference-league": "UCOL"}
 ALIASES = {
+    "Man City": "Manchester City", "Man Utd": "Manchester United",
+    "Man United": "Manchester United", "Spurs": "Tottenham Hotspur",
+    "Wolves": "Wolverhampton Wanderers", "Nott'm Forest": "Nottingham Forest",
+    "Bodo Glimt": "Fotballklubben Bodø/Glimt", "Lillestrom": "Lillestrøm Sportsklubb",
+    "Sturm Graz": "Sportklub Puntigamer Sturm Graz", "Brann": "Sportsklubben Brann",
+    "Plzen": "FC Viktoria Plzen", "Viktoria Plzeň": "FC Viktoria Plzen",
+    "Elfsborg": "Idrottsföreningen Elfsborg", "IF Elfsborg": "Idrottsföreningen Elfsborg",
+    "Rīgas FS": "FC RFS", "Sabah FA": "Sabah FK",
+    "Club Brugge": "Club Brugge KV", "Napoli": "SSC Napoli",
+    "Roma": "Associazione Sportiva Roma", "AS Roma": "Associazione Sportiva Roma",
+    "Olympiacos": "Olympiakos Syndesmos Filathlon Peiraios",
+    "Olympiakos Piraeus": "Olympiakos Syndesmos Filathlon Peiraios",
+    "Omonia": "Omonia Nicosia", "PSV": "PSV Eindhoven",
+    "Salzburg": "Fußballclub Red Bull Salzburg", "Red Bull Salzburg": "Fußballclub Red Bull Salzburg",
     "Bayern München": "Bayern Munich", "FC Bayern München": "Bayern Munich",
     "Hull": "Hull City", "Newcastle": "Newcastle United", "Celta": "Celta de Vigo", "Celta Vigo": "Celta de Vigo",
     "Inter": "Inter Milan", "Sparta Praha": "Sparta Prague", "Lyon": "Olympique Lyon",
@@ -181,10 +197,28 @@ def read_open_results(games, names, by_league, club_key):
     return result
 
 
-def build_europe_history(games: pd.DataFrame, mixed: bool = True):
+def build_europe_history(games: pd.DataFrame, mixed: bool = True, seeds=None, initial_audit=None):
     """Emit fixture inputs before applying any results from that day."""
     seed = {}
-    if mixed and ELO_SEED.is_file():
+    initialize = None
+    if mixed and seeds is not None:
+        warmup_games = games.loc[games["date"].gt(seeds.first_snapshot) & games["date"].lt(START)]
+        _, warmup = replay_europe_history(warmup_games, seed, seeds.initial)
+
+        def initialize(club, day, league):
+            rating, source, as_of = seeds.initial(club, day, league)
+            entries = warmup.get(club)
+            if source != "club" and entries:
+                previous_day, previous_elo, history = entries[-1]
+                previous_day = pd.Timestamp(previous_day)
+                if len(history) == HISTORY_LENGTH and day - previous_day <= MAX_WARMUP_AGE:
+                    rating, source, as_of = previous_elo, "historical matches", previous_day
+            if initial_audit is not None:
+                initial_audit[club] = (day.date(), rating, source, as_of.date())
+            return rating, source, as_of
+
+        games = games.loc[games["date"].ge(START)]
+    elif mixed and ELO_SEED.is_file():
         rows = pd.read_csv(ELO_SEED, parse_dates=["as_of"])
         if (rows["as_of"] != START).any() or rows["club_id"].duplicated().any():
             raise ValueError("Expected one Elo per club at 2020-08-01")
@@ -195,13 +229,22 @@ def build_europe_history(games: pd.DataFrame, mixed: bool = True):
     if not mixed:
         games = games.loc[games["competition_id"].isin(EUROPE)
                           & games["round"].str.startswith("Group", na=False)]
-    ratings, history, timeline = seed.copy(), defaultdict(lambda: deque(maxlen=5)), defaultdict(list)
+    return replay_europe_history(games, seed, initialize)
+
+
+def replay_europe_history(games, seed, initialize):
+    ratings, history, timeline = seed.copy(), defaultdict(lambda: deque(maxlen=HISTORY_LENGTH)), defaultdict(list)
     observations = []
     for date, day in games.groupby("date", sort=True):
         changes = defaultdict(float)
         form_updates = []
         for row in day.itertuples(index=False):
             home, away = row.home_club_id, row.away_club_id
+            if initialize is not None:
+                league = row.competition_id if row.competition_type == "domestic_league" else None
+                for club in (home, away):
+                    if club not in ratings:
+                        ratings[club] = initialize(club, date, league)[0]
             margin = row.home_club_goals - row.away_club_goals
             if row.competition_id in EUROPE and str(row.round).startswith("Group") and row.season >= 2021:
                 result = 0 if margin > 0 else (1 if margin == 0 else 2)
